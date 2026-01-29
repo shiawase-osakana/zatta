@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>EDH Life Counter (Minus)</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Config & Styles -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        p1: '#00f0ff', // Cyan
+                        p2: '#ff2a6d', // Neon Red
+                        p3: '#05f966', // Neon Green
+                        p4: '#d300ff', // Neon Purple
+                        dark: '#050505',
+                        panel: '#121212',
+                    },
+                    fontFamily: {
+                        sans: ['"Hiragino Sans"', '"Hiragino Kaku Gothic ProN"', '"Noto Sans JP"', 'sans-serif'],
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', monospace],
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'pop': 'pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                        'slide-in': 'slideIn 0.2s ease-out forwards',
+                    },
+                    keyframes: {
+                        pop: {
+                            '0%': { transform: 'scale(0.9)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
+                        },
+                        slideIn: {
+                            '0%': { opacity: '0', transform: 'translateY(-10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    },
+                    fontSize: {
+                        'life-huge': '28vmin', 
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            overscroll-behavior: none;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+            background-color: #050505;
+            color: white;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        .tabular-nums { font-variant-numeric: tabular-nums; }
+
+        .game-board-container {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        @media screen and (orientation: portrait) {
+            .game-board-container {
+                transform: rotate(90deg);
+                transform-origin: center;
+                width: 100vh;
+                height: 100vw;
+                top: 50%;
+                left: 50%;
+                margin-left: -50vh;
+                margin-top: -50vw;
+            }
+        }
+
+        ::-webkit-scrollbar { display: none; }
+        .neon-line { filter: drop-shadow(0 0 8px var(--glow-color)); }
+
+        .glass-panel {
+            background: rgba(18, 18, 18, 0.9);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+        
+        .hud-grid-bg {
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // --- Icons (SVG) ---
+        const SkullIcon = ({ className }) => (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <circle cx="9" cy="12" r="1" />
+                <circle cx="15" cy="12" r="1" />
+                <path d="M8 20v2h8v-2" />
+                <path d="M12.5 17l-.5-1-.5 1h1z" />
+                <path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20" />
+            </svg>
+        );
+
+        const SwordIcon = ({ className }) => (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5" />
+                <line x1="13" y1="19" x2="19" y2="13" />
+                <line x1="16" y1="16" x2="20" y2="20" />
+                <line x1="19" y1="21" x2="21" y2="19" />
+            </svg>
+        );
+
+        const ShieldIcon = ({ className }) => (
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+        );
+
+        const BoltIcon = ({ className }) => (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+        );
+
+        // --- Configuration ---
+        const PLAYERS_CONFIG = [
+            { id: 0, label: 'P1', hex: '#00f0ff', rotate: true },
+            { id: 1, label: 'P2', hex: '#ff2a6d', rotate: true },
+            { id: 2, label: 'P3', hex: '#05f966', rotate: false },
+            { id: 3, label: 'P4', hex: '#d300ff', rotate: false },
+        ];
+
+        const INITIAL_LIFE = 40;
+        const LETHAL_COMMANDER_DAMAGE = 21;
+
+        // --- Animated Counter Component ---
+        const AnimatedCounter = ({ value, className, style }) => {
+            const [displayValue, setDisplayValue] = useState(value);
+            const startTimeRef = useRef(null);
+            const startValueRef = useRef(value);
+            const targetValueRef = useRef(value);
+            const frameRef = useRef(null);
+
+            useEffect(() => {
+                if (value !== targetValueRef.current) {
+                    startValueRef.current = displayValue;
+                    targetValueRef.current = value;
+                    startTimeRef.current = null;
+
+                    const animate = (timestamp) => {
+                        if (!startTimeRef.current) startTimeRef.current = timestamp;
+                        const progress = timestamp - startTimeRef.current;
+                        const duration = 600; 
+
+                        if (progress < duration) {
+                            const rate = 1 - Math.pow(1 - progress / duration, 3);
+                            const nextValue = startValueRef.current + (targetValueRef.current - startValueRef.current) * rate;
+                            setDisplayValue(Math.round(nextValue));
+                            frameRef.current = requestAnimationFrame(animate);
+                        } else {
+                            setDisplayValue(targetValueRef.current);
+                        }
+                    };
+                    
+                    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+                    frameRef.current = requestAnimationFrame(animate);
+                }
+            }, [value]);
+
+            useEffect(() => {
+                return () => {
+                    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+                }
+            }, []);
+
+            return (
+                <div className={className} style={style}>
+                    {displayValue}
+                </div>
+            );
+        };
+
+        // --- HUD Jog Dial ---
+        const HudJogDial = ({ value, onChange, color }) => {
+            const knobRef = useRef(null);
+            const [angle, setAngle] = useState(0);
+            const lastAngleRef = useRef(null);
+            const accumRef = useRef(0);
+
+            const handleStart = (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = knobRef.current.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                lastAngleRef.current = Math.atan2(touch.clientY - centerY, touch.clientX - centerX);
+            };
+
+            const handleMove = (e) => {
+                e.preventDefault();
+                if (lastAngleRef.current === null) return;
+                const touch = e.touches[0];
+                const rect = knobRef.current.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const currentAngle = Math.atan2(touch.clientY - centerY, touch.clientX - centerX);
+                let delta = currentAngle - lastAngleRef.current;
+                if (delta > Math.PI) delta -= 2 * Math.PI;
+                if (delta < -Math.PI) delta += 2 * Math.PI;
+                lastAngleRef.current = currentAngle;
+                accumRef.current += delta;
+
+                const threshold = 0.2;
+                if (Math.abs(accumRef.current) >= threshold) {
+                    const steps = Math.floor(Math.abs(accumRef.current) / threshold);
+                    const sign = Math.sign(accumRef.current);
+                    onChange(steps * sign);
+                    accumRef.current -= (steps * threshold * sign);
+                }
+                setAngle(a => a + delta);
+            };
+            const handleEnd = () => { lastAngleRef.current = null; accumRef.current = 0; };
+
+            return (
+                <div className="relative w-full h-full flex items-center justify-center">
+                    <div 
+                        ref={knobRef}
+                        className="relative w-40 h-40 lg:w-48 lg:h-48 rounded-full cursor-grab active:cursor-grabbing touch-none z-10"
+                        onTouchStart={handleStart} onTouchMove={handleMove} onTouchEnd={handleEnd}
+                    >
+                        <div 
+                            className="w-full h-full rounded-full border-2 border-white/10 bg-[#0a0a0a] shadow-[0_0_30px_rgba(0,0,0,0.8)] flex items-center justify-center transition-transform duration-75"
+                            style={{ 
+                                transform: `rotate(${angle}rad)`,
+                                boxShadow: `inset 0 0 20px ${color}20, 0 0 20px rgba(0,0,0,0.5)`
+                            }}
+                        >
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1.5 h-4 bg-white rounded-full shadow-[0_0_10px_white]"></div>
+                            {[...Array(12)].map((_,i) => (
+                                <div key={i} className="absolute w-[2px] h-[6px] bg-gray-700 top-1 left-1/2 -ml-[1px]" style={{transformOrigin:'50% 50%', transform:`rotate(${i*30}deg) translateY(-85px)`}}></div>
+                            ))}
+                        </div>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                            {/* マイナス値の場合は色を変えるなどの処理も可能だが、現状は白で統一 */}
+                            <span className="text-6xl lg:text-7xl font-bold tabular-nums leading-none drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]" style={{color: value < 0 ? '#ff5555' : 'white'}}>
+                                {value > 0 ? `+${value}` : value}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-widest text-gray-500 mt-2 font-bold">ダメージ量</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Toggle Button ---
+        const HudToggle = ({ label, active, onClick, color, icon: Icon }) => (
+            <button 
+                onClick={onClick}
+                className={`
+                    relative w-full py-3 px-4 rounded-lg border transition-all duration-200 flex items-center justify-between group overflow-hidden
+                    ${active ? 'bg-white/5 border-white/30' : 'bg-transparent border-white/10 hover:bg-white/5'}
+                `}
+                style={{
+                    borderColor: active ? color : undefined,
+                    boxShadow: active ? `inset 0 0 10px ${color}10` : 'none'
+                }}
+            >
+                <div className={`absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-300 ${active ? 'opacity-100' : 'opacity-0'}`} style={{ backgroundColor: color }}></div>
+                <div className="flex items-center gap-3 z-10 overflow-hidden">
+                    <div className={`transition-colors flex-shrink-0 ${active ? 'text-white' : 'text-gray-500 group-hover:text-gray-300'}`} style={{ color: active ? color : undefined }}>
+                        {Icon && <Icon className="w-5 h-5" />}
+                    </div>
+                    <span className={`text-base font-bold tracking-wide whitespace-nowrap ${active ? 'text-white' : 'text-gray-400'}`}>{label}</span>
+                </div>
+                <div className={`w-5 h-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${active ? 'border-transparent' : 'border-gray-600'}`} style={{ backgroundColor: active ? color : 'transparent' }}>
+                    {active && <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                </div>
+            </button>
+        );
+
+        const App = () => {
+            const [players, setPlayers] = useState(
+                PLAYERS_CONFIG.map(p => ({
+                    ...p, life: INITIAL_LIFE, commanderDamage: {}, castCount: { 0: 0, 1: 0 }, isPartnerMode: false,
+                }))
+            );
+
+            const [dragState, setDragState] = useState({
+                active: false, sourceId: null, startX: 0, startY: 0, currentX: 0, currentY: 0, targetId: null,
+            });
+
+            const [modalState, setModalState] = useState({
+                open: false, sourceId: null, targetId: null, value: 0, isCommander: false, commanderIndex: 0, isLifelink: false, isDrain: false,
+            });
+
+            const [cmdrModal, setCmdrModal] = useState({ open: false, playerId: null });
+            const [resetModalOpen, setResetModalOpen] = useState(false);
+            const playerRefs = useRef([]);
+            const centerRef = useRef(null);
+
+            // --- Logic ---
+            const modifyLife = (targetId, amount) => {
+                setPlayers(prev => prev.map(p => { if (p.id !== targetId) return p; return { ...p, life: p.life + amount }; }));
+            };
+            const togglePartnerMode = (targetId) => {
+                setPlayers(prev => prev.map(p => { if (p.id !== targetId) return p; return { ...p, isPartnerMode: !p.isPartnerMode }; }));
+            };
+            const modifyCastCount = (targetId, index, amount) => {
+                setPlayers(prev => prev.map(p => {
+                    if (p.id !== targetId) return p;
+                    const current = p.castCount[index];
+                    return { ...p, castCount: { ...p.castCount, [index]: Math.max(0, current + amount) } };
+                }));
+            };
+            const confirmReset = () => {
+                setPlayers(PLAYERS_CONFIG.map(p => ({ ...p, life: INITIAL_LIFE, commanderDamage: {}, castCount: { 0: 0, 1: 0 }, isPartnerMode: false, })));
+                setResetModalOpen(false);
+            };
+            const commitTransaction = () => {
+                const { sourceId, targetId, value, isCommander, commanderIndex, isLifelink, isDrain } = modalState;
+                if (value === 0) { setModalState({ ...modalState, open: false }); return; }
+                setPlayers(prev => {
+                    let nextPlayers = [...prev];
+                    if (targetId === 'ALL') {
+                        nextPlayers = nextPlayers.map(p => {
+                            if (p.id === sourceId) return isDrain ? { ...p, life: p.life + value } : p;
+                            else return { ...p, life: p.life - value };
+                        });
+                    } else {
+                        nextPlayers = nextPlayers.map(p => {
+                            if (p.id === sourceId) return isLifelink ? { ...p, life: p.life + value } : p;
+                            if (p.id === targetId) {
+                                let newP = { ...p, life: p.life - value };
+                                if (isCommander) {
+                                    const currentCD = p.commanderDamage[sourceId] || { 0: 0, 1: 0 };
+                                    const newAmount = (currentCD[commanderIndex] || 0) + value;
+                                    newP.commanderDamage = { ...p.commanderDamage, [sourceId]: { ...currentCD, [commanderIndex]: newAmount } };
+                                }
+                                return newP;
+                            }
+                            return p;
+                        });
+                    }
+                    return nextPlayers;
+                });
+                setModalState({ ...modalState, open: false });
+            };
+
+            // --- Touch Handlers ---
+            const handleTouchStart = (e, sourceId) => {
+                if (e.target.closest('button') || e.target.closest('.pointer-events-auto')) return;
+                const touch = e.touches[0];
+                setDragState({ active: true, sourceId, startX: touch.clientX, startY: touch.clientY, currentX: touch.clientX, currentY: touch.clientY, targetId: null });
+            };
+            const handleTouchMove = (e) => {
+                if (!dragState.active) return;
+                const touch = e.touches[0];
+                let foundTarget = null;
+                playerRefs.current.forEach((ref, idx) => {
+                    if (ref && idx !== dragState.sourceId) {
+                        const rect = ref.getBoundingClientRect();
+                        if (touch.clientX >= rect.left && touch.clientX <= rect.right && touch.clientY >= rect.top && touch.clientY <= rect.bottom) foundTarget = idx;
+                    }
+                });
+                if (!foundTarget && centerRef.current) {
+                    const rect = centerRef.current.getBoundingClientRect();
+                    if (touch.clientX >= rect.left - 30 && touch.clientX <= rect.right + 30 && touch.clientY >= rect.top - 30 && touch.clientY <= rect.bottom + 30) foundTarget = 'ALL';
+                }
+                setDragState(prev => ({ ...prev, currentX: touch.clientX, currentY: touch.clientY, targetId: foundTarget }));
+            };
+            const handleTouchEnd = () => {
+                if (!dragState.active) return;
+                if (dragState.targetId !== null) {
+                    setModalState({ open: true, sourceId: dragState.sourceId, targetId: dragState.targetId, value: 0, isCommander: false, commanderIndex: 0, isLifelink: false, isDrain: false });
+                }
+                setDragState(prev => ({ ...prev, active: false, targetId: null }));
+            };
+
+            const isDamageModalRotated = modalState.o
