@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>EDH Life Counter (Icon)</title>
+    <title>EDH Life Counter (Fit)</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -67,29 +67,40 @@
             overflow: hidden;
             margin: 0;
             padding: 0;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
         }
         
         .tabular-nums { font-variant-numeric: tabular-nums; }
 
+        /* 画面サイズピッタリに合わせるための設定 */
         .game-board-container {
-            width: 100vw;
-            height: 100vh;
             position: absolute;
             top: 0;
             left: 0;
+            /* dvh, dvw を使ってモバイルブラウザのアドレスバー対策 */
+            width: 100vw; 
+            height: 100vh;
+            width: 100dvw;
+            height: 100dvh;
         }
+
+        /* 縦画面時の強制90度回転レイアウト */
         @media screen and (orientation: portrait) {
             .game-board-container {
                 transform: rotate(90deg);
                 transform-origin: center;
+                /* 幅と高さを入れ替える */
                 width: 100vh;
                 height: 100vw;
+                width: 100dvh;
+                height: 100dvw;
+                
+                /* 中心配置補正 */
                 top: 50%;
                 left: 50%;
-                margin-left: -50vh;
-                margin-top: -50vw;
+                margin-left: -50dvh; /* height / 2 */
+                margin-top: -50dvw;  /* width / 2 */
             }
         }
 
@@ -450,13 +461,13 @@
 
             return (
                 <div className="fixed inset-0 bg-dark overflow-hidden" onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
-                    {/* Game Board */}
-                    <div className="game-board-container flex flex-wrap relative z-10 p-1 gap-1 box-border">
+                    {/* Game Board (Grid Layout for Perfect Fit) */}
+                    <div className="game-board-container grid grid-cols-2 grid-rows-2 relative z-10 p-1 gap-1 box-border">
                         {players.map((player, idx) => (
                             <div 
                                 key={player.id} ref={el => playerRefs.current[idx] = el}
                                 className={`
-                                    relative flex-1 min-w-[45%] h-[calc(50%-0.25rem)] rounded-2xl flex flex-col justify-center transition-all duration-300 select-none bg-[#121212] border border-gray-800 overflow-hidden
+                                    relative w-full h-full rounded-2xl flex flex-col justify-center transition-all duration-300 select-none bg-[#121212] border border-gray-800 overflow-hidden
                                     ${dragState.targetId === idx ? 'scale-[0.98] ring-4 ring-offset-2 ring-offset-black z-10' : ''} ${dragState.sourceId === idx ? 'opacity-90' : ''}
                                 `}
                                 style={{
@@ -469,7 +480,7 @@
                                 <div className={`w-full h-full flex flex-col items-center relative pointer-events-none ${player.rotate ? 'rotate-180' : ''}`}>
                                     <div className="absolute inset-0 opacity-10" style={{ background: `radial-gradient(circle at center, ${PLAYERS_CONFIG[idx].hex}, transparent 80%)` }}></div>
                                     
-                                    {/* --- 巨大ライフ表示 (アニメーション対応) --- */}
+                                    {/* --- 巨大ライフ表示 --- */}
                                     <AnimatedCounter 
                                         value={player.life}
                                         className="absolute inset-0 flex items-center justify-center font-mono font-bold tabular-nums tracking-tighter leading-none z-0"
@@ -480,9 +491,7 @@
                                         }}
                                     />
 
-                                    {/* --- 前面レイヤー (UIパーツ) --- */}
-                                    
-                                    {/* 統率者ダメージバッジ (上部) */}
+                                    {/* --- UIパーツ --- */}
                                     <div className="absolute top-2 left-2 right-2 flex flex-wrap justify-center gap-1 z-20 min-h-[1.5rem]">
                                         {Object.entries(player.commanderDamage).map(([srcId, dmgs]) => (
                                             Object.entries(dmgs).map(([cmdrIdx, val]) => {
@@ -498,7 +507,6 @@
                                         ))}
                                     </div>
 
-                                    {/* 操作ボタン (左右の端) - 視覚化済み */}
                                     <div className="absolute left-0 top-0 bottom-0 w-24 flex items-center justify-center z-30 pointer-events-none">
                                         <button 
                                             className="w-14 h-14 rounded-full border border-white/10 bg-black/40 backdrop-blur-md flex items-center justify-center pointer-events-auto active:scale-90 active:bg-white/10 active:border-white/40 transition-all duration-200 shadow-xl group"
@@ -516,7 +524,6 @@
                                         </button>
                                     </div>
 
-                                    {/* キャスト回数 (下部中央) */}
                                     <div className="absolute bottom-4 left-0 right-0 flex justify-center z-20">
                                         <div 
                                             className="px-4 py-1.5 bg-black/20 border border-white/5 rounded-full text-xs font-bold text-gray-400 shadow-sm pointer-events-auto cursor-pointer active:scale-95 transition flex items-center gap-2 tabular-nums backdrop-blur hover:bg-white/5 hover:text-white"
@@ -561,18 +568,18 @@
                         {modalState.open && (
                             <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-xl animate-pop">
                                 <div className={`transition-transform duration-300 ${isDamageModalRotated ? 'rotate-180' : ''}`}>
-                                    {/* Wide HUD Panel (Max width increased to 1100px) */}
+                                    {/* Wide HUD Panel */}
                                     <div 
                                         className="glass-panel rounded-2xl overflow-hidden flex flex-row w-[95vw] max-w-[1100px] h-auto max-h-[75vh] min-h-[320px] relative border"
                                         style={{ borderColor: `${PLAYERS_CONFIG[modalState.sourceId].hex}40` }}    
                                     >
                                         <div className="absolute inset-0 hud-grid-bg opacity-20 pointer-events-none"></div>
                                         
-                                        {/* Left Panel: Wider (50%) */}
+                                        {/* Left Panel */}
                                         <div className="w-[50%] flex flex-col border-r border-white/10 p-2 sm:p-4 bg-[#0a0a0a]/80 z-10 relative">
                                             <div className="text-[10px] font-bold text-gray-500 mb-1 tracking-[0.2em]">ダメージ処理</div>
                                             
-                                            {/* Header Centered & Size Adjusted */}
+                                            {/* Header Centered */}
                                             <div className="flex items-center justify-center gap-6 mb-4 pb-2 border-b border-white/10">
                                                 <span className="font-bold text-lg" style={{ color: PLAYERS_CONFIG[modalState.sourceId].hex }}>{PLAYERS_CONFIG[modalState.sourceId].label}</span>
                                                 <span className="text-gray-600 text-sm">➞</span>
@@ -641,7 +648,6 @@
                                         {/* Right Panel: Dial */}
                                         <div className="flex-1 relative flex items-center justify-center bg-gradient-to-br from-[#121212] to-[#050505]">
                                             <div className="absolute inset-0 opacity-10" style={{ background: `radial-gradient(circle at center, ${PLAYERS_CONFIG[modalState.sourceId].hex}, transparent 70%)` }}></div>
-                                            {/* Math.max(0, ...) 制限を削除し、s.value + delta のみに変更 */}
                                             <HudJogDial value={modalState.value} onChange={(delta) => setModalState(s => ({ ...s, value: s.value + delta }))} color={PLAYERS_CONFIG[modalState.sourceId].hex} />
                                         </div>
                                     </div>
@@ -667,7 +673,6 @@
                                             </div>
 
                                             <div className="flex-1 flex flex-col gap-3 overflow-y-auto">
-                                                {/* 共闘トグル */}
                                                 <HudToggle 
                                                     label="共闘を使用する" 
                                                     active={players[cmdrModal.playerId].isPartnerMode} 
@@ -678,7 +683,6 @@
 
                                                 <div className="border-t border-white/10 my-1"></div>
 
-                                                {/* 統率者A選択 */}
                                                 <HudToggle 
                                                     label="統率者A" 
                                                     active={cmdrModal.activeCommanderIndex === 0} 
@@ -687,7 +691,6 @@
                                                     icon={CrownIcon}
                                                 />
 
-                                                {/* 統率者B選択 (共闘時のみ) */}
                                                 {players[cmdrModal.playerId].isPartnerMode && (
                                                     <HudToggle 
                                                         label="統率者B" 
@@ -698,7 +701,6 @@
                                                     />
                                                 )}
                                                 
-                                                {/* Current Cost Info */}
                                                 <div className="mt-auto pt-2 text-center text-xs text-gray-500">
                                                     追加コスト: +{Math.max(0, cmdrModal.tempValues[cmdrModal.activeCommanderIndex] - 1) * 2}
                                                 </div>
