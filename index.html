@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>EDH Life Counter (Unified)</title>
+    <title>EDH Life Counter (Icon)</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -289,7 +289,8 @@
             <button 
                 onClick={onClick}
                 className={`
-                    relative w-full ${isSmall ? 'py-2 px-3' : 'py-3 px-4'} rounded-lg border transition-all duration-200 flex items-center justify-between group overflow-hidden
+                    relative w-full ${isSmall ? 'py-2 px-2 sm:px-3' : 'py-2.5 px-2 sm:px-4'} 
+                    rounded-lg border transition-all duration-200 flex items-center justify-between group overflow-hidden
                     ${active ? 'bg-white/5 border-white/30' : 'bg-transparent border-white/10 hover:bg-white/5'}
                 `}
                 style={{
@@ -298,15 +299,21 @@
                 }}
             >
                 <div className={`absolute left-0 top-0 bottom-0 w-0.5 transition-all duration-300 ${active ? 'opacity-100' : 'opacity-0'}`} style={{ backgroundColor: color }}></div>
-                <div className="flex items-center gap-3 z-10 overflow-hidden">
+                <div className="flex items-center gap-2 sm:gap-3 z-10 overflow-hidden flex-1 min-w-0">
                     <div className={`transition-colors flex-shrink-0 ${active ? 'text-white' : 'text-gray-500 group-hover:text-gray-300'}`} style={{ color: active ? color : undefined }}>
-                        {Icon && <Icon className="w-5 h-5" />}
+                        {Icon && <Icon className="w-4 h-4 sm:w-5 sm:h-5" />}
                     </div>
-                    <span className={`${isSmall ? 'text-sm' : 'text-base'} font-bold tracking-wide whitespace-nowrap ${active ? 'text-white' : 'text-gray-400'}`}>{label}</span>
+                    <span className={`
+                        ${isSmall ? 'text-xs sm:text-sm' : 'text-xs sm:text-sm md:text-base'} 
+                        font-bold tracking-wide whitespace-nowrap overflow-hidden text-ellipsis
+                        ${active ? 'text-white' : 'text-gray-400'}
+                    `}>
+                        {label}
+                    </span>
                 </div>
                 {isCheckbox && (
-                    <div className={`w-5 h-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${active ? 'border-transparent' : 'border-gray-600'}`} style={{ backgroundColor: active ? color : 'transparent' }}>
-                        {active && <svg className="w-4 h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                    <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded border flex-shrink-0 flex items-center justify-center transition-colors ml-2 ${active ? 'border-transparent' : 'border-gray-600'}`} style={{ backgroundColor: active ? color : 'transparent' }}>
+                        {active && <svg className="w-3 h-3 sm:w-4 sm:h-4 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                     </div>
                 )}
             </button>
@@ -327,12 +334,11 @@
                 open: false, sourceId: null, targetId: null, value: 0, isCommander: false, commanderIndex: 0, isLifelink: false, isDrain: false,
             });
 
-            // New State for Unified Cast Count Modal
             const [cmdrModal, setCmdrModal] = useState({ 
                 open: false, 
                 playerId: null, 
-                activeCommanderIndex: 0, // 0:A, 1:B (ダイヤル操作対象)
-                tempValues: { 0: 0, 1: 0 } // モーダル内での一時的な値
+                activeCommanderIndex: 0, 
+                tempValues: { 0: 0, 1: 0 } 
             });
 
             const [resetModalOpen, setResetModalOpen] = useState(false);
@@ -347,14 +353,12 @@
                 setPlayers(prev => prev.map(p => { if (p.id !== targetId) return p; return { ...p, isPartnerMode: !p.isPartnerMode }; }));
             };
             
-            // Cast Count Logic (Updated for Dial)
             const openCmdrModal = (playerId) => {
                 const player = players[playerId];
                 setCmdrModal({
                     open: true,
                     playerId: playerId,
                     activeCommanderIndex: 0,
-                    // 現在のキャスト回数を「n回目（次の回数）」として表示するため +1 してセット
                     tempValues: { 
                         0: player.castCount[0] + 1, 
                         1: player.castCount[1] + 1 
@@ -369,7 +373,6 @@
                     return {
                         ...p,
                         castCount: {
-                            // 表示値(n回目)から1引いて実数(n-1回唱えた)に戻す。最小0
                             0: Math.max(0, tempValues[0] - 1),
                             1: Math.max(0, tempValues[1] - 1)
                         }
@@ -516,9 +519,10 @@
                                     {/* キャスト回数 (下部中央) */}
                                     <div className="absolute bottom-4 left-0 right-0 flex justify-center z-20">
                                         <div 
-                                            className="px-4 py-1.5 bg-black/20 border border-white/5 rounded-full text-xs font-bold text-gray-400 shadow-sm pointer-events-auto cursor-pointer active:scale-95 transition flex gap-2 tabular-nums backdrop-blur hover:bg-white/5 hover:text-white"
+                                            className="px-4 py-1.5 bg-black/20 border border-white/5 rounded-full text-xs font-bold text-gray-400 shadow-sm pointer-events-auto cursor-pointer active:scale-95 transition flex items-center gap-2 tabular-nums backdrop-blur hover:bg-white/5 hover:text-white"
                                             onClick={(e) => { e.stopPropagation(); openCmdrModal(player.id); }}
                                         >
+                                            <span className="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor]" style={{ backgroundColor: PLAYERS_CONFIG[idx].hex, color: PLAYERS_CONFIG[idx].hex }}></span>
                                             {player.isPartnerMode ? (
                                                 <>
                                                     <span style={{ color: PLAYERS_CONFIG[idx].hex }}>A:{player.castCount[0] + 1}</span>
@@ -554,26 +558,28 @@
                             </div>
                         )}
 
-                        {/* Damage Input Modal (Unified) */}
                         {modalState.open && (
                             <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-xl animate-pop">
                                 <div className={`transition-transform duration-300 ${isDamageModalRotated ? 'rotate-180' : ''}`}>
+                                    {/* Wide HUD Panel (Max width increased to 1100px) */}
                                     <div 
-                                        className="glass-panel rounded-2xl overflow-hidden flex flex-row w-[95vw] max-w-[900px] h-auto max-h-[75vh] min-h-[320px] relative border"
+                                        className="glass-panel rounded-2xl overflow-hidden flex flex-row w-[95vw] max-w-[1100px] h-auto max-h-[75vh] min-h-[320px] relative border"
                                         style={{ borderColor: `${PLAYERS_CONFIG[modalState.sourceId].hex}40` }}    
                                     >
                                         <div className="absolute inset-0 hud-grid-bg opacity-20 pointer-events-none"></div>
                                         
-                                        {/* Left Panel: 50% */}
-                                        <div className="w-[50%] flex flex-col border-r border-white/10 p-4 bg-[#0a0a0a]/80 z-10 relative">
+                                        {/* Left Panel: Wider (50%) */}
+                                        <div className="w-[50%] flex flex-col border-r border-white/10 p-2 sm:p-4 bg-[#0a0a0a]/80 z-10 relative">
                                             <div className="text-[10px] font-bold text-gray-500 mb-1 tracking-[0.2em]">ダメージ処理</div>
-                                            <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
-                                                <span className="font-bold text-base" style={{ color: PLAYERS_CONFIG[modalState.sourceId].hex }}>{PLAYERS_CONFIG[modalState.sourceId].label}</span>
-                                                <span className="text-gray-600 text-[10px]">➞</span>
-                                                <span className="font-bold text-base text-white">{modalState.targetId === 'ALL' ? '全員' : PLAYERS_CONFIG[modalState.targetId].label}</span>
+                                            
+                                            {/* Header Centered & Size Adjusted */}
+                                            <div className="flex items-center justify-center gap-6 mb-4 pb-2 border-b border-white/10">
+                                                <span className="font-bold text-lg" style={{ color: PLAYERS_CONFIG[modalState.sourceId].hex }}>{PLAYERS_CONFIG[modalState.sourceId].label}</span>
+                                                <span className="text-gray-600 text-sm">➞</span>
+                                                <span className="font-bold text-lg text-white">{modalState.targetId === 'ALL' ? '全員' : PLAYERS_CONFIG[modalState.targetId].label}</span>
                                             </div>
 
-                                            <div className="flex-1 flex flex-col gap-3 overflow-y-auto">
+                                            <div className="flex-1 flex flex-col gap-2 sm:gap-3 overflow-y-auto">
                                                 {modalState.targetId !== 'ALL' ? (
                                                     <>
                                                         <HudToggle 
@@ -588,7 +594,7 @@
                                                             isCheckbox
                                                         />
                                                         {modalState.isCommander && (
-                                                            <div className="pl-4 animate-slide-in">
+                                                            <div className="pl-2 sm:pl-4 animate-slide-in">
                                                                 <HudToggle 
                                                                     label="統率者B (共闘)" 
                                                                     active={modalState.commanderIndex === 1} 
@@ -635,6 +641,7 @@
                                         {/* Right Panel: Dial */}
                                         <div className="flex-1 relative flex items-center justify-center bg-gradient-to-br from-[#121212] to-[#050505]">
                                             <div className="absolute inset-0 opacity-10" style={{ background: `radial-gradient(circle at center, ${PLAYERS_CONFIG[modalState.sourceId].hex}, transparent 70%)` }}></div>
+                                            {/* Math.max(0, ...) 制限を削除し、s.value + delta のみに変更 */}
                                             <HudJogDial value={modalState.value} onChange={(delta) => setModalState(s => ({ ...s, value: s.value + delta }))} color={PLAYERS_CONFIG[modalState.sourceId].hex} />
                                         </div>
                                     </div>
@@ -655,8 +662,8 @@
                                         {/* Left Panel */}
                                         <div className="w-[50%] flex flex-col border-r border-white/10 p-4 bg-[#0a0a0a]/80 z-10 relative">
                                             <div className="text-[10px] font-bold text-gray-500 mb-1 tracking-[0.2em]">キャスト回数設定</div>
-                                            <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
-                                                <span className="font-bold text-base" style={{ color: PLAYERS_CONFIG[cmdrModal.playerId].hex }}>{PLAYERS_CONFIG[cmdrModal.playerId].label}</span>
+                                            <div className="flex items-center justify-center mb-4 pb-2 border-b border-white/10">
+                                                <span className="font-bold text-lg" style={{ color: PLAYERS_CONFIG[cmdrModal.playerId].hex }}>{PLAYERS_CONFIG[cmdrModal.playerId].label}</span>
                                             </div>
 
                                             <div className="flex-1 flex flex-col gap-3 overflow-y-auto">
