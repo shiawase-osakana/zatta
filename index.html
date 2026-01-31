@@ -403,4 +403,250 @@
                 setDragState(prev => ({ ...prev, active: false, targetId: null }));
             };
 
-            const isDamageModalRotated = modalState.o
+            const isDamageModalRotated = modalState.open && modalState.sourceId !== null ? PLAYERS_CONFIG[modalState.sourceId].rotate : false;
+            const isCmdrModalRotated = cmdrModal.open && cmdrModal.playerId !== null ? PLAYERS_CONFIG[cmdrModal.playerId].rotate : false;
+
+            return (
+                <div className="fixed inset-0 bg-dark overflow-hidden" onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
+                    {/* Game Board */}
+                    <div className="game-board-container flex flex-wrap relative z-10 p-1 gap-1 box-border">
+                        {players.map((player, idx) => (
+                            <div 
+                                key={player.id} ref={el => playerRefs.current[idx] = el}
+                                className={`
+                                    relative flex-1 min-w-[45%] h-[calc(50%-0.25rem)] rounded-2xl flex flex-col justify-center transition-all duration-300 select-none bg-[#121212] border border-gray-800 overflow-hidden
+                                    ${dragState.targetId === idx ? 'scale-[0.98] ring-4 ring-offset-2 ring-offset-black z-10' : ''} ${dragState.sourceId === idx ? 'opacity-90' : ''}
+                                `}
+                                style={{
+                                    '--player-color': PLAYERS_CONFIG[idx].hex,
+                                    boxShadow: `inset 0 0 30px -15px ${PLAYERS_CONFIG[idx].hex}`,
+                                    borderColor: dragState.targetId === idx ? PLAYERS_CONFIG[idx].hex : 'rgba(255,255,255,0.08)'
+                                }}
+                                onTouchStart={(e) => handleTouchStart(e, player.id)}
+                            >
+                                <div className={`w-full h-full flex flex-col items-center relative pointer-events-none ${player.rotate ? 'rotate-180' : ''}`}>
+                                    <div className="absolute inset-0 opacity-10" style={{ background: `radial-gradient(circle at center, ${PLAYERS_CONFIG[idx].hex}, transparent 80%)` }}></div>
+                                    
+                                    {/* --- 巨大ライフ表示 (アニメーション対応) --- */}
+                                    <AnimatedCounter 
+                                        value={player.life}
+                                        className="absolute inset-0 flex items-center justify-center font-mono font-bold tabular-nums tracking-tighter leading-none z-0"
+                                        style={{ 
+                                            fontSize: '28vmin',
+                                            textShadow: `0 0 50px ${PLAYERS_CONFIG[idx].hex}30`,
+                                            color: player.life <= 0 ? '#333' : 'white'
+                                        }}
+                                    />
+
+                                    {/* --- 前面レイヤー (UIパーツ) --- */}
+                                    
+                                    {/* 統率者ダメージバッジ (上部) */}
+                                    <div className="absolute top-2 left-2 right-2 flex flex-wrap justify-center gap-1 z-20 min-h-[1.5rem]">
+                                        {Object.entries(player.commanderDamage).map(([srcId, dmgs]) => (
+                                            Object.entries(dmgs).map(([cmdrIdx, val]) => {
+                                                if (val <= 0) return null;
+                                                const isLethal = val >= LETHAL_COMMANDER_DAMAGE;
+                                                return (
+                                                    <span key={`${srcId}-${cmdrIdx}`} className={`text-xs font-bold px-2 py-0.5 rounded shadow-lg border flex items-center gap-1 backdrop-blur-md ${isLethal ? 'text-white border-red-500 bg-red-900/80 animate-pulse' : 'text-gray-200 border-gray-600 bg-black/60'}`}>
+                                                        <span className="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor]" style={{ backgroundColor: PLAYERS_CONFIG[srcId].hex, color: PLAYERS_CONFIG[srcId].hex }}></span>
+                                                        {val} {isLethal && <SkullIcon className="w-3 h-3" />}
+                                                    </span>
+                                                );
+                                            })
+                                        ))}
+                                    </div>
+
+                                    {/* 操作ボタン (左右の端) - 視覚化済み */}
+                                    <div className="absolute left-0 top-0 bottom-0 w-24 flex items-center justify-center z-30 pointer-events-none">
+                                        <button 
+                                            className="w-14 h-14 rounded-full border border-white/10 bg-black/40 backdrop-blur-md flex items-center justify-center pointer-events-auto active:scale-90 active:bg-white/10 active:border-white/40 transition-all duration-200 shadow-xl group"
+                                            onTouchStart={(e) => { e.stopPropagation(); modifyLife(player.id, -1); }}
+                                        >
+                                            <span className="text-3xl text-white/50 group-active:text-white font-bold pb-1 transition-colors">−</span>
+                                        </button>
+                                    </div>
+                                    <div className="absolute right-0 top-0 bottom-0 w-24 flex items-center justify-center z-30 pointer-events-none">
+                                        <button 
+                                            className="w-14 h-14 rounded-full border border-white/10 bg-black/40 backdrop-blur-md flex items-center justify-center pointer-events-auto active:scale-90 active:bg-white/10 active:border-white/40 transition-all duration-200 shadow-xl group"
+                                            onTouchStart={(e) => { e.stopPropagation(); modifyLife(player.id, 1); }}
+                                        >
+                                            <span className="text-3xl text-white/50 group-active:text-white font-bold pb-1 transition-colors">＋</span>
+                                        </button>
+                                    </div>
+
+                                    {/* キャスト回数 (下部中央) */}
+                                    <div className="absolute bottom-4 left-0 right-0 flex justify-center z-20">
+                                        <div 
+                                            className="px-4 py-1.5 bg-black/20 border border-white/5 rounded-full text-xs font-bold text-gray-400 shadow-sm pointer-events-auto cursor-pointer active:scale-95 transition flex gap-2 tabular-nums backdrop-blur hover:bg-white/5 hover:text-white"
+                                            onClick={(e) => { e.stopPropagation(); setCmdrModal({ open: true, playerId: player.id }); }}
+                                        >
+                                            {player.isPartnerMode ? (
+                                                <>
+                                                    <span style={{ color: PLAYERS_CONFIG[idx].hex }}>A:{player.castCount[0] + 1}</span>
+                                                    <span className="opacity-30">|</span>
+                                                    <span style={{ color: PLAYERS_CONFIG[idx].hex }}>B:{player.castCount[1] + 1}</span>
+                                                </>
+                                            ) : (
+                                                <span>{player.castCount[0] + 1}回目 <span className="opacity-50">コスト+{player.castCount[0] * 2}</span></span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* Center Zone */}
+                        <div ref={centerRef} className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[16vmin] h-[16vmin] rounded-full flex items-center justify-center transition-all duration-300 border shadow-[0_0_20px_rgba(0,0,0,0.5)] ${dragState.active ? (dragState.targetId === 'ALL' ? 'bg-yellow-500/20 border-yellow-400 scale-125 z-40 backdrop-blur-sm' : 'bg-black/80 border-white/20 scale-90 z-30 opacity-50') : 'bg-[#1a1a1a] border-[#333] z-50 hover:border-white/40'}`}>
+                            {dragState.active ? <span className={`font-bold text-xs lg:text-sm text-center leading-tight ${dragState.targetId === 'ALL' ? 'text-yellow-400 drop-shadow-[0_0_5px_currentColor]' : 'text-gray-500'}`}>全員</span> : <button className="w-full h-full rounded-full flex items-center justify-center text-[10px] lg:text-xs font-bold text-gray-500 hover:text-white pointer-events-auto touch-manipulation tracking-widest" onClick={(e) => { e.stopPropagation(); setResetModalOpen(true); }}>リセット</button>}
+                        </div>
+
+                        {/* Modals */}
+                        {resetModalOpen && (
+                            <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-xl animate-pop">
+                                <div className="bg-[#1a1a1a] border border-gray-700 rounded-2xl p-6 w-[320px] shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col items-center gap-4">
+                                    <div className="text-xl font-bold text-white">ゲームリセット</div>
+                                    <p className="text-gray-400 text-sm">初期状態に戻しますか？</p>
+                                    <div className="flex w-full gap-3 mt-2">
+                                        <button className="flex-1 py-3 bg-gray-800 rounded-lg font-bold text-gray-300 active:bg-gray-700 transition" onClick={() => setResetModalOpen(false)}>戻る</button>
+                                        <button className="flex-1 py-3 bg-red-600/20 border border-red-500/50 text-red-400 rounded-lg font-bold active:bg-red-600/40 transition" onClick={confirmReset}>リセット</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {modalState.open && (
+                            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-xl animate-pop">
+                                <div className={`transition-transform duration-300 ${isDamageModalRotated ? 'rotate-180' : ''}`}>
+                                    {/* Wide HUD Panel (Max width increased to 1100px) */}
+                                    <div 
+                                        className="glass-panel rounded-2xl overflow-hidden flex flex-row w-[95vw] max-w-[1100px] h-auto max-h-[75vh] min-h-[320px] relative border"
+                                        style={{ borderColor: `${PLAYERS_CONFIG[modalState.sourceId].hex}40` }}    
+                                    >
+                                        <div className="absolute inset-0 hud-grid-bg opacity-20 pointer-events-none"></div>
+                                        
+                                        {/* Left Panel: Wider (50%) */}
+                                        <div className="w-[50%] flex flex-col border-r border-white/10 p-4 bg-[#0a0a0a]/80 z-10 relative">
+                                            <div className="text-[10px] font-bold text-gray-500 mb-1 tracking-[0.2em]">ダメージ処理</div>
+                                            <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
+                                                <span className="font-bold text-base" style={{ color: PLAYERS_CONFIG[modalState.sourceId].hex }}>{PLAYERS_CONFIG[modalState.sourceId].label}</span>
+                                                <span className="text-gray-600 text-[10px]">➞</span>
+                                                <span className="font-bold text-base text-white">{modalState.targetId === 'ALL' ? '全員' : PLAYERS_CONFIG[modalState.targetId].label}</span>
+                                            </div>
+
+                                            <div className="flex-1 flex flex-col gap-3 overflow-y-auto">
+                                                {modalState.targetId !== 'ALL' ? (
+                                                    <>
+                                                        <HudToggle 
+                                                            label="統率者ダメージ" 
+                                                            active={modalState.isCommander} 
+                                                            onClick={() => {
+                                                                const next = !modalState.isCommander;
+                                                                setModalState(s => ({ ...s, isCommander: next, commanderIndex: next ? s.commanderIndex : 0 }));
+                                                            }}
+                                                            color="#ff2a6d"
+                                                            icon={SwordIcon}
+                                                        />
+                                                        {modalState.isCommander && (
+                                                            <div className="pl-4 animate-slide-in">
+                                                                <HudToggle 
+                                                                    label="統率者B (共闘)" 
+                                                                    active={modalState.commanderIndex === 1} 
+                                                                    onClick={() => setModalState(s => ({ ...s, commanderIndex: s.commanderIndex === 1 ? 0 : 1 }))}
+                                                                    color="#ff2a6d"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                        <HudToggle 
+                                                            label="絆魂 (回復)" 
+                                                            active={modalState.isLifelink} 
+                                                            onClick={() => setModalState(s => ({ ...s, isLifelink: !s.isLifelink }))}
+                                                            color="#facc15"
+                                                            icon={ShieldIcon}
+                                                        />
+                                                    </>
+                                                ) : (
+                                                    <HudToggle 
+                                                        label="ドレイン" 
+                                                        active={modalState.isDrain} 
+                                                        onClick={() => setModalState(s => ({ ...s, isDrain: !s.isDrain }))}
+                                                        color="#d300ff"
+                                                        icon={BoltIcon}
+                                                    />
+                                                )}
+                                            </div>
+
+                                            <div className="mt-3 grid grid-cols-2 gap-2">
+                                                <button className="h-10 rounded font-bold text-sm text-gray-400 bg-white/5 hover:bg-white/10 transition" onClick={() => setModalState({ ...modalState, open: false })}>キャンセル</button>
+                                                <button 
+                                                    className="h-10 rounded font-bold text-sm text-black shadow-lg hover:brightness-110 active:scale-95 transition" 
+                                                    style={{ backgroundColor: PLAYERS_CONFIG[modalState.sourceId].hex }}
+                                                    onClick={commitTransaction}
+                                                >
+                                                    決定
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Right Panel: Dial */}
+                                        <div className="flex-1 relative flex items-center justify-center bg-gradient-to-br from-[#121212] to-[#050505]">
+                                            <div className="absolute inset-0 opacity-10" style={{ background: `radial-gradient(circle at center, ${PLAYERS_CONFIG[modalState.sourceId].hex}, transparent 70%)` }}></div>
+                                            {/* Math.max(0, ...) 制限を削除し、s.value + delta のみに変更 */}
+                                            <HudJogDial value={modalState.value} onChange={(delta) => setModalState(s => ({ ...s, value: s.value + delta }))} color={PLAYERS_CONFIG[modalState.sourceId].hex} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {cmdrModal.open && (
+                            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-xl animate-pop">
+                                <div className={`transition-transform duration-300 ${isCmdrModalRotated ? 'rotate-180' : ''}`}>
+                                    <div className="glass-panel border rounded-3xl p-5 w-[420px] flex flex-col gap-4 relative" style={{ borderColor: `${PLAYERS_CONFIG[cmdrModal.playerId].hex}40` }}>
+                                        <div className="w-full flex items-center justify-between pb-2 border-b border-white/10">
+                                            <div className="font-bold text-base tracking-widest text-gray-200">キャスト回数</div>
+                                            <label className="flex items-center gap-2 cursor-pointer bg-white/5 px-3 py-1.5 rounded-full border border-white/10 hover:bg-white/10 transition">
+                                                <input type="checkbox" checked={players[cmdrModal.playerId].isPartnerMode} onChange={() => togglePartnerMode(cmdrModal.playerId)} className="hidden" />
+                                                <span className={`w-2 h-2 rounded-full ${players[cmdrModal.playerId].isPartnerMode ? 'bg-blue-500 shadow-[0_0_8px_#3b82f6]' : 'bg-gray-600'}`}></span>
+                                                <span className="text-[10px] font-bold text-gray-300">共闘</span>
+                                            </label>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {[0, ...(players[cmdrModal.playerId].isPartnerMode ? [1] : [])].map((idx) => (
+                                                <div key={idx} className="bg-black/40 rounded-lg p-3 border border-white/5 flex items-center justify-between">
+                                                    <div className="text-[10px] font-bold text-gray-500 tracking-widest uppercase w-20">{players[cmdrModal.playerId].isPartnerMode ? `統率者 ${String.fromCharCode(65+idx)}` : '統率者'}</div>
+                                                    <button className="w-8 h-8 rounded bg-white/5 text-white font-bold text-lg active:scale-90 transition" onClick={() => modifyCastCount(cmdrModal.playerId, idx, -1)}>−</button>
+                                                    <div className="flex flex-col items-center w-20">
+                                                        <span className="text-2xl font-bold tabular-nums text-white">{players[cmdrModal.playerId].castCount[idx] + 1}</span>
+                                                        <span className="text-[10px] text-gray-500">コスト +{players[cmdrModal.playerId].castCount[idx] * 2}</span>
+                                                    </div>
+                                                    <button className="w-8 h-8 rounded bg-white/5 text-white font-bold text-lg active:scale-90 transition" onClick={() => modifyCastCount(cmdrModal.playerId, idx, 1)}>+</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <button className="w-full py-3 rounded-lg font-bold text-black shadow-lg hover:brightness-110 active:scale-95 transition" style={{ backgroundColor: PLAYERS_CONFIG[cmdrModal.playerId].hex }} onClick={() => setCmdrModal({ open: false, playerId: null })}>閉じる</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    {dragState.active && (
+                        <svg className="absolute inset-0 pointer-events-none z-[55] w-full h-full overflow-visible" style={{ '--glow-color': PLAYERS_CONFIG[dragState.sourceId].hex }}>
+                            <defs>
+                                <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                                    <feGaussianBlur stdDeviation="4" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                                </filter>
+                            </defs>
+                            <circle cx={dragState.startX} cy={dragState.startY} r="6" fill={PLAYERS_CONFIG[dragState.sourceId].hex} className="neon-line" />
+                            <line x1={dragState.startX} y1={dragState.startY} x2={dragState.currentX} y2={dragState.currentY} stroke={PLAYERS_CONFIG[dragState.sourceId].hex} strokeWidth="3" strokeLinecap="round" className="neon-line" />
+                            <circle cx={dragState.currentX} cy={dragState.currentY} r="10" fill={PLAYERS_CONFIG[dragState.sourceId].hex} className="neon-line" />
+                        </svg>
+                    )}
+                </div>
+            );
+        };
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
