@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MTG Commander All-in-One Tracker</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        mtg: {
+                            dark: '#1a1a1d',
+                            panel: '#2d2d30',
+                            accent: '#6f6fd8',
+                            red: '#d86f6f',
+                            green: '#6fd88c',
+                            gold: '#d8c06f',
+                        }
+                    },
+                    animation: {
+                        'bounce-short': 'bounce 0.5s infinite',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Three.js & Cannon.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+
+    <!-- Icons (Fixed Version UMD) -->
+    <script src="https://unpkg.com/lucide@0.263.1/dist/umd/lucide.min.js"></script>
+
+    <style>
+        body { background-color: #0f0f10; color: #e0e0e0; overflow: hidden; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+        .glass { background: rgba(45, 45, 48, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input, textarea { background: transparent; outline: none; }
+        
+        /* Landscape layout adjustments */
+        @media (orientation: landscape) {
+            .player-zone-inner {
+                flex-direction: row;
+                align-items: center;
+            }
+            .player-info-col {
+                width: 40%;
+                border-right: 1px solid rgba(255,255,255,0.05);
+                padding-right: 0.5rem;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                height: 100%;
+            }
+            .player-widgets-col {
+                width: 60%;
+                height: 100%;
+                padding-left: 0.5rem;
+                padding-top: 0;
+            }
+        }
+        
+        /* Portrait layout adjustments */
+        @media (orientation: portrait) {
+            .player-zone-inner {
+                flex-direction: column;
+            }
+            .player-info-col {
+                width: 100%;
+                border-bottom: 1px solid rgba(255,255,255,0.05);
+                padding-bottom: 0.5rem;
+            }
+            .player-widgets-col {
+                width: 100%;
+                flex: 1;
+                padding-top: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // アイコンコンポーネント: LucideのUMD版からSVGを生成するラッパー
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const svgRef = useRef(null);
+            
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons && window.lucide.icons[name]) {
+                    const iconData = window.lucide.icons[name];
+                    // SVG文字列を生成するのは複雑なので、lucide.createIconsのAPIを部分的に利用するか、
+                    // または簡易的にSVG要素を作成する。
+                    // ここではlucide.icons[name]が [tag, attrs, children] の構造を持っている前提で簡易レンダリングも考えられるが、
+                    // UMD版のlucideには `createElement` APIがない場合があるため、
+                    // 最も安全な方法は `lucide.createIcons` を特定の要素に対して実行すること。
+                    
+                    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    // 基本属性
+                    svg.setAttribute("width", size);
+                    svg.setAttribute("height", size);
+                    svg.setAttribute("viewBox", "0 0 24 24");
+                    svg.setAttribute("fill", "none");
+                    svg.setAttribute("stroke", "currentColor");
+                    svg.setAttribute("stroke-width", "2");
+                    svg.setAttribute("stroke-linecap", "round");
+                    svg.setAttribute("stroke-linejoin", "round");
+                    if(className) svg.setAttribute("class", className);
+
+                    // パス情報の抽出 (Lucide v0.263.1 の内部構造に依存)
+                    // window.lucide.icons[name] は配列形式の定義データを持っている
+                    const [tag, attrs, children] = window.lucide.icons[name];
+                    
+                    // 単純化: lucide.icons[name]の内容を解析してpathを追加
+                    // ※ Lucideのバージョンによって構造が違うため、
+                    // 安全策として単純なinnerHTML注入を行う（createIconsを使う）
+                    
+                    const i = document.createElement('i');
+                    i.setAttribute('data-lucide', name);
+                    i.setAttribute('width', size);
+                    i.setAttribute('height', size);
+                    i.setAttribute('class', className);
+                    
+                    if (svgRef.current) {
+                        svgRef.current.innerHTML = '';
+                        svgRef.current.appendChild(i);
+                        window.lucide.createIcons({
+                            root: svgRef.current,
+                            nameAttr: 'data-lucide',
+                            attrs: {
+                                class: className,
+                                width: size,
+                                height: size
+                            }
+                        });
+                    }
+                }
+            }, [name, size, className]);
+
+            return <span ref={svgRef} className="inline-flex items-center justify-center" />;
+        };
+
+        // --- Constants & Utilities ---
+        const PRESETS = [
+            { label: '毒', type: 'COUNTER', icon: 'Skull', initial: 0, color: 'text-green-400' },
+            { label: '統率者税', type: 'COUNTER', icon: 'Shield', initial: 0, color: 'text-gray-400' },
+            { label: 'エネルギー', type: 'COUNTER', icon: 'Zap', initial: 0, color: 'text-blue-400' },
+            { label: '統治者', type: 'UNIQUE', icon: 'Crown', color: 'text-yellow-400' },
+            { label: 'イニシアチブ', type: 'UNIQUE', icon: 'Map', color: 'text-purple-400' },
+            { label: '昇殿', type: 'TOGGLE', icon: 'Box', color: 'text-yellow-200' },
+            { label: 'メモ', type: 'MEMO', icon: 'FileText', color: 'text-gray-300' },
+        ];
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        // --- 3D Dice Component ---
+        const DiceRoller = ({ onClose }) => {
+            const mountRef = useRef(null);
+            const [result, setResult] = useState(null);
+            const [isRolling, setIsRolling] = useState(false);
+
+            useEffect(() => {
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+                camera.position.set(0, 15, 10);
+                camera.lookAt(0, 0, 0);
+
+                const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true;
+                mountRef.current.appendChild(renderer.domElement);
+
+                const world = new CANNON.World();
+                world.gravity.set(0, -9.82 * 2, 0); 
+                world.broadphase = new CANNON.NaiveBroadphase();
+                world.solver.iterations = 10;
+
+                const physicsMaterial = new CANNON.Material("groundMaterial");
+                const physicsContactMaterial = new CANNON.ContactMaterial(physicsMaterial, physicsMaterial, {
+                    friction: 0.3, restitution: 0.5
+                });
+                world.addContactMaterial(physicsContactMaterial);
+
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(10, 20, 10);
+                dirLight.castShadow = true;
+                scene.add(dirLight);
+
+                const floorShape = new CANNON.Plane();
+                const floorBody = new CANNON.Body({ mass: 0, material: physicsMaterial });
+                floorBody.addShape(floorShape);
+                floorBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+                world.addBody(floorBody);
+
+                const floorGeo = new THREE.PlaneGeometry(100, 100);
+                const floorMat = new THREE.ShadowMaterial({ opacity: 0.3 });
+                const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+                floorMesh.rotation.x = -Math.PI / 2;
+                floorMesh.receiveShadow = true;
+                scene.add(floorMesh);
+
+                const objectsToUpdate = [];
+
+                const createTextTexture = (text, bgColor = '#ffffff', textColor = '#000000') => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 128; canvas.height = 128;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = bgColor; ctx.fillRect(0, 0, 128, 128);
+                    ctx.strokeStyle = '#333'; ctx.lineWidth = 10; ctx.strokeRect(0,0,128,128);
+                    ctx.fillStyle = textColor; ctx.font = 'bold 64px Arial';
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillText(text, 64, 64);
+                    return new THREE.CanvasTexture(canvas);
+                };
+
+                const createDiceMaterials = (sides) => {
+                    if (sides === 6) {
+                        return Array(6).fill(0).map((_, i) => 
+                            new THREE.MeshStandardMaterial({ map: createTextTexture((i+1).toString()) })
+                        );
+                    }
+                    return new THREE.MeshStandardMaterial({ color: 0x6f6fd8, roughness: 0.4 });
+                };
+
+                const throwObject = (type) => {
+                    setIsRolling(true);
+                    setResult(null);
+                    let shape, geometry, material, mass = 1;
+                    
+                    if (type === 'd6') {
+                        shape = new CANNON.Box(new CANNON.Vec3(1, 1, 1));
+                        geometry = new THREE.BoxGeometry(2, 2, 2);
+                        material = createDiceMaterials(6);
+                    } else if (type === 'd20') {
+                        shape = new CANNON.Sphere(1.2);
+                        geometry = new THREE.IcosahedronGeometry(1.2, 0);
+                        material = new THREE.MeshStandardMaterial({ color: 0x6f6fd8, flatShading: true });
+                    } else if (type === 'coin') {
+                        shape = new CANNON.Cylinder(1.5, 1.5, 0.2, 10);
+                        geometry = new THREE.CylinderGeometry(1.5, 1.5, 0.2, 32);
+                        const headTex = createTextTexture('表', '#d8c06f');
+                        const tailTex = createTextTexture('裏', '#c0c0c0');
+                        material = [
+                            new THREE.MeshStandardMaterial({ color: 0x555555 }),
+                            new THREE.MeshStandardMaterial({ map: headTex }),
+                            new THREE.MeshStandardMaterial({ map: tailTex })
+                        ];
+                    }
+
+                    const body = new CANNON.Body({ mass, material: physicsMaterial });
+                    body.addShape(shape);
+                    body.position.set((Math.random() - 0.5) * 5, 10, (Math.random() - 0.5) * 5);
+                    body.quaternion.setFromEuler(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                    body.velocity.set(0, -5, 0);
+                    body.angularVelocity.set(Math.random() * 10, Math.random() * 10, Math.random() * 10);
+
+                    world.addBody(body);
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.castShadow = true; mesh.receiveShadow = true;
+                    scene.add(mesh);
+                    objectsToUpdate.push({ mesh, body, type });
+                };
+
+                let animationId;
+                let framesSinceStop = 0;
+
+                const animate = () => {
+                    world.step(1 / 60);
+                    let allStopped = true;
+                    objectsToUpdate.forEach(obj => {
+                        obj.mesh.position.copy(obj.body.position);
+                        obj.mesh.quaternion.copy(obj.body.quaternion);
+                        if (obj.body.velocity.norm() > 0.1 || obj.body.angularVelocity.norm() > 0.1) {
+                            allStopped = false; framesSinceStop = 0;
+                        }
+                    });
+                    if (objectsToUpdate.length > 0 && allStopped) {
+                        framesSinceStop++;
+                        if (framesSinceStop > 30 && !result) calculateResult();
+                    }
+                    renderer.render(scene, camera);
+                    animationId = requestAnimationFrame(animate);
+                };
+
+                const calculateResult = () => {
+                    const obj = objectsToUpdate[0];
+                    if (!obj) return;
+                    let finalVal = "?";
+                    
+                    if (obj.type === 'd6') finalVal = Math.floor(Math.random() * 6) + 1;
+                    else if (obj.type === 'd20') finalVal = Math.floor(Math.random() * 20) + 1;
+                    else if (obj.type === 'coin') {
+                        const localUp = new THREE.Vector3(0, 1, 0);
+                        localUp.applyQuaternion(obj.mesh.quaternion);
+                        finalVal = localUp.y > 0 ? "表" : "裏";
+                    }
+                    setResult(finalVal); setIsRolling(false);
+                };
+
+                window.throwDice3D = throwObject;
+                animate();
+
+                return () => {
+                    cancelAnimationFrame(animationId);
+                    mountRef.current.removeChild(renderer.domElement);
+                    scene.clear();
+                    delete window.throwDice3D;
+                };
+            }, []);
+
+            return (
+                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+                    <div ref={mountRef} className="absolute inset-0" />
+                    <div className="absolute bottom-10 flex gap-4 z-50">
+                        <button onClick={() => window.throwDice3D && window.throwDice3D('d6')} disabled={isRolling} 
+                            className="bg-mtg-panel border border-mtg-accent text-white px-6 py-3 rounded-full font-bold shadow-lg active:scale-95">D6</button>
+                        <button onClick={() => window.throwDice3D && window.throwDice3D('d20')} disabled={isRolling} 
+                            className="bg-mtg-panel border border-mtg-accent text-white px-6 py-3 rounded-full font-bold shadow-lg active:scale-95">D20</button>
+                        <button onClick={() => window.throwDice3D && window.throwDice3D('coin')} disabled={isRolling} 
+                            className="bg-mtg-panel border border-gold text-white px-6 py-3 rounded-full font-bold shadow-lg active:scale-95">Coin</button>
+                    </div>
+                    <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white z-50 p-2">
+                        <Icon name="X" size={32} />
+                    </button>
+                    {result && (
+                        <div className="absolute z-50 animate-bounce-short pointer-events-none">
+                            <div className="text-8xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-mtg-accent drop-shadow-[0_0_10px_rgba(111,111,216,0.8)]">
+                                {result}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- Widgets ---
+        const CounterWidget = ({ widget, updateWidget }) => (
+            <div className="flex items-center justify-between p-2 bg-mtg-dark/50 rounded-lg border border-white/5 mb-2">
+                <span className={`text-xs font-bold uppercase tracking-wider ${widget.color || 'text-gray-400'}`}>{widget.label}</span>
+                <div className="flex items-center gap-3">
+                    <button onClick={() => updateWidget(widget.id, { value: widget.value - 1 })} className="p-2 bg-white/10 rounded hover:bg-white/20 active:scale-90 transition"><Icon name="Minus" size={16} /></button>
+                    <span className="text-xl font-mono font-bold w-8 text-center">{widget.value}</span>
+                    <button onClick={() => updateWidget(widget.id, { value: widget.value + 1 })} className="p-2 bg-white/10 rounded hover:bg-white/20 active:scale-90 transition"><Icon name="Plus" size={16} /></button>
+                </div>
+            </div>
+        );
+
+        const ToggleWidget = ({ widget, updateWidget }) => (
+            <div onClick={() => updateWidget(widget.id, { value: !widget.value })}
+                className={`cursor-pointer flex items-center justify-between p-3 rounded-lg border transition-all mb-2 ${widget.value ? 'bg-mtg-accent/20 border-mtg-accent' : 'bg-mtg-dark/50 border-white/5'}`}>
+                <span className={`font-bold ${widget.value ? 'text-white' : 'text-gray-500'}`}>{widget.label}</span>
+                <div className={`w-10 h-5 rounded-full relative transition ${widget.value ? 'bg-mtg-accent' : 'bg-gray-700'}`}>
+                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${widget.value ? 'left-6' : 'left-1'}`} />
+                </div>
+            </div>
+        );
+
+        const UniqueWidget = ({ widget, acquireUnique }) => (
+            <div onClick={() => acquireUnique(widget)}
+                className={`cursor-pointer flex items-center justify-center p-3 rounded-lg border transition-all mb-2 gap-2 
+                ${widget.value ? `bg-gradient-to-r from-transparent via-${widget.color?.split('-')[1] || 'yellow'}-900/30 to-transparent border-${widget.color?.split('-')[1] || 'yellow'}-500/50` : 'bg-mtg-dark/50 border-white/5 opacity-60'}`}>
+                <Icon name={widget.icon} size={18} className={widget.value ? widget.color : 'text-gray-500'} />
+                <span className={`font-bold ${widget.value ? widget.color : 'text-gray-500'}`}>{widget.label}</span>
+                {widget.value && <Icon name="Check" size={16} className={widget.color} />}
+            </div>
+        );
+
+        const MemoWidget = ({ widget, updateWidget }) => (
+            <div className="relative mb-2">
+                <textarea value={widget.value} onChange={(e) => updateWidget(widget.id, { value: e.target.value })}
+                    placeholder={widget.label}
+                    className="w-full bg-mtg-dark/50 border border-white/10 rounded-lg p-2 text-sm text-gray-300 resize-none h-16 focus:border-mtg-accent/50 focus:bg-mtg-dark transition" />
+            </div>
+        );
+
+        const LifeCounter = ({ value, onChange, compact }) => (
+            <div className={`flex flex-col items-center justify-center ${compact ? 'py-1' : 'py-4'}`}>
+                <div className={`flex items-center ${compact ? 'gap-3' : 'gap-6'}`}>
+                    <button onClick={() => onChange(value - 1)} className={`${compact ? 'w-10 h-10' : 'w-12 h-12'} flex items-center justify-center bg-mtg-panel rounded-full shadow-lg active:scale-95 text-mtg-red border border-white/5`}><Icon name="Minus" size={compact ? 20 : 24} /></button>
+                    <div className={`${compact ? 'text-5xl' : 'text-6xl'} font-black tracking-tighter text-white drop-shadow-lg`}>{value}</div>
+                    <button onClick={() => onChange(value + 1)} className={`${compact ? 'w-10 h-10' : 'w-12 h-12'} flex items-center justify-center bg-mtg-panel rounded-full shadow-lg active:scale-95 text-mtg-green border border-white/5`}><Icon name="Plus" size={compact ? 20 : 24} /></button>
+                </div>
+            </div>
+        );
+
+        // --- Player Zone ---
+        const PlayerZone = ({ player, widgets, updatePlayer, addWidget, updateWidget, removeWidget, acquireUnique, settings }) => {
+            const playerWidgets = widgets.filter(w => w.playerId === player.id);
+            const isTop = player.id <= 2;
+            const shouldRotate = isTop && settings.rotateOpponents;
+            const bgGradient = `from-[${player.colorTheme || '#151516'}] to-[#0a0a0b]`;
+
+            return (
+                <div className={`relative flex flex-col h-full overflow-hidden border border-white/5 ${player.color} transition-colors bg-gradient-to-b ${bgGradient} ${shouldRotate ? 'rotate-180' : ''}`}>
+                    {/* Inner Container: Changes Flex direction based on orientation via CSS */}
+                    <div className="player-zone-inner flex flex-1 w-full h-full overflow-hidden p-2">
+                        
+                        {/* Left/Top: Life & Info */}
+                        <div className="player-info-col flex-none flex flex-col items-center justify-center">
+                            <div className="w-full flex justify-between items-center px-2 mb-2">
+                                <input value={player.name} onChange={(e) => updatePlayer(player.id, { name: e.target.value })}
+                                    className="font-bold text-gray-400 w-24 bg-transparent focus:text-white transition text-center" />
+                                <button onClick={() => addWidget(player.id)} className="text-gray-600 hover:text-white p-2 bg-white/5 rounded-full">
+                                    <Icon name="Plus" size={16} />
+                                </button>
+                            </div>
+                            <LifeCounter value={player.life} onChange={(val) => updatePlayer(player.id, { life: val })} />
+                            
+                            {/* Commander Dmg Quick Buttons (Optional placeholder) */}
+                            <div className="mt-2 flex gap-1 justify-center opacity-50 hover:opacity-100 transition">
+                                {player.cmdrDmg && Object.keys(player.cmdrDmg).map(k => (
+                                    <div key={k} className="text-xs text-red-400 border border-red-900 px-1 rounded">{k}:{player.cmdrDmg[k]}</div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Right/Bottom: Widgets List */}
+                        <div className="player-widgets-col flex-1 overflow-y-auto no-scrollbar relative">
+                            {playerWidgets.length === 0 && (
+                                <div className="absolute inset-0 flex items-center justify-center text-white/10 text-xs pointer-events-none">
+                                    NO ITEMS
+                                </div>
+                            )}
+                            {playerWidgets.map(widget => (
+                                <div key={widget.id} className="relative group">
+                                    {widget.type === 'COUNTER' && <CounterWidget widget={widget} updateWidget={updateWidget} />}
+                                    {widget.type === 'TOGGLE' && <ToggleWidget widget={widget} updateWidget={updateWidget} />}
+                                    {widget.type === 'UNIQUE' && <UniqueWidget widget={widget} acquireUnique={acquireUnique} />}
+                                    {widget.type === 'MEMO' && <MemoWidget widget={widget} updateWidget={updateWidget} />}
+                                    
+                                    <button onClick={() => removeWidget(widget.id)}
+                                        className="absolute -right-2 -top-2 bg-red-500/80 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition scale-75 shadow-md z-10">
+                                        <Icon name="X" size={12} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App ---
+        const App = () => {
+            const loadState = () => {
+                const saved = localStorage.getItem('mtg-tracker-v2');
+                if (saved) return JSON.parse(saved);
+                return {
+                    players: [
+                        { id: 1, name: "P1", life: 40, color: 'border-t-4 border-red-500/20' },
+                        { id: 2, name: "P2", life: 40, color: 'border-t-4 border-blue-500/20' },
+                        { id: 3, name: "P3", life: 40, color: 'border-t-4 border-green-500/20' },
+                        { id: 4, name: "P4", life: 40, color: 'border-t-4 border-white/20' }
+                    ],
+                    widgets: [],
+                    settings: { rotateOpponents: true }
+                };
+            };
+
+            const [state, setState] = useState(loadState);
+            const [showMenu, setShowMenu] = useState(false);
+            const [show3D, setShow3D] = useState(false);
+            const [activePlayerForAdd, setActivePlayerForAdd] = useState(null);
+            const [isReady, setIsReady] = useState(false);
+            const [progress, setProgress] = useState(0);
+
+            // Wait for Lucide to load
+            useEffect(() => {
+                const checkLucide = setInterval(() => {
+                    setProgress(prev => {
+                        if (window.lucide) return 100;
+                        // Slowly increase progress up to 90% while waiting
+                        return prev < 90 ? prev + (Math.random() * 5) : prev;
+                    });
+
+                    if (window.lucide) {
+                        setProgress(100);
+                        // Add a small delay to show 100% before switching
+                        setTimeout(() => {
+                            setIsReady(true);
+                            clearInterval(checkLucide);
+                        }, 500);
+                    }
+                }, 100);
+                return () => clearInterval(checkLucide);
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('mtg-tracker-v2', JSON.stringify(state));
+            }, [state]);
+
+            const updatePlayer = (id, data) => {
+                setState(prev => ({ ...prev, players: prev.players.map(p => p.id === id ? { ...p, ...data } : p) }));
+            };
+
+            const addWidget = (playerId, preset = null) => {
+                const newWidget = preset ? {
+                    id: generateId(), playerId, type: preset.type, label: preset.label,
+                    value: preset.type === 'COUNTER' ? preset.initial : (preset.type === 'MEMO' ? '' : false),
+                    icon: preset.icon, color: preset.color
+                } : {
+                    id: generateId(), playerId, type: 'COUNTER', label: 'New Item', value: 0
+                };
+                setState(prev => ({ ...prev, widgets: [...prev.widgets, newWidget] }));
+                setActivePlayerForAdd(null);
+            };
+
+            const updateWidget = (id, data) => setState(prev => ({ ...prev, widgets: prev.widgets.map(w => w.id === id ? { ...w, ...data } : w) }));
+            const removeWidget = (id) => setState(prev => ({ ...prev, widgets: prev.widgets.filter(w => w.id !== id) }));
+            
+            const acquireUnique = (targetWidget) => {
+                const label = targetWidget.label;
+                setState(prev => ({
+                    ...prev,
+                    widgets: prev.widgets.map(w => {
+                        if (w.label === label && w.type === 'UNIQUE') return { ...w, value: w.id === targetWidget.id };
+                        return w;
+                    })
+                }));
+            };
+
+            const resetGame = () => {
+                if(!confirm("ゲームをリセットしますか？")) return;
+                setState({
+                    players: [
+                        { id: 1, name: "P1", life: 40, color: 'border-t-4 border-red-500/20' },
+                        { id: 2, name: "P2", life: 40, color: 'border-t-4 border-blue-500/20' },
+                        { id: 3, name: "P3", life: 40, color: 'border-t-4 border-green-500/20' },
+                        { id: 4, name: "P4", life: 40, color: 'border-t-4 border-white/20' }
+                    ],
+                    widgets: [],
+                    settings: state.settings
+                });
+                setShowMenu(false);
+            };
+
+            if (!isReady) return (
+                <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#0f0f10] text-gray-500">
+                    <div className="w-64 h-1 bg-gray-800 rounded-full overflow-hidden relative mb-4">
+                        <div 
+                            className="h-full bg-mtg-accent shadow-[0_0_10px_rgba(111,111,216,0.5)] transition-all duration-300 ease-out"
+                            style={{ width: `${Math.min(progress, 100)}%` }}
+                        />
+                    </div>
+                    <div className="text-xs font-mono tracking-widest opacity-50 flex items-center gap-2">
+                        LOADING ASSETS <span className="animate-pulse">...</span> {Math.floor(progress)}%
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="h-screen w-screen flex flex-col bg-[#0f0f10]">
+                    {/* Main Grid: 2x2. CSS handles internal layout of each cell */}
+                    <div className="flex-1 grid grid-cols-2 grid-rows-2">
+                        {state.players.map(player => (
+                            <PlayerZone 
+                                key={player.id} 
+                                player={player} 
+                                widgets={state.widgets}
+                                updatePlayer={updatePlayer}
+                                addWidget={(pid) => setActivePlayerForAdd(pid)}
+                                updateWidget={updateWidget}
+                                removeWidget={removeWidget}
+                                acquireUnique={acquireUnique}
+                                settings={state.settings}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Center Action Button */}
+                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+                        <button onClick={() => setShowMenu(!showMenu)}
+                            className={`w-14 h-14 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(0,0,0,0.5)] transition-all duration-300 ${showMenu ? 'bg-mtg-dark rotate-45' : 'bg-mtg-accent'}`}>
+                            <Icon name="Plus" size={24} className="text-white" />
+                        </button>
+                    </div>
+
+                    {/* Center Menu */}
+                    {showMenu && (
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
+                            <button onClick={() => { setShow3D(true); setShowMenu(false); }} className="absolute -top-20 -left-6 w-12 h-12 bg-mtg-panel rounded-full flex items-center justify-center border border-white/10 shadow-lg animate-bounce-short">
+                                <Icon name="Box" size={20} className="text-blue-400" />
+                            </button>
+                            <button onClick={resetGame} className="absolute -bottom-20 -left-6 w-12 h-12 bg-mtg-panel rounded-full flex items-center justify-center border border-white/10 shadow-lg">
+                                <Icon name="RotateCcw" size={20} className="text-red-400" />
+                            </button>
+                             <button onClick={() => {
+                                 setState(p => ({...p, settings: {...p.settings, rotateOpponents: !p.settings.rotateOpponents}}));
+                                 setShowMenu(false);
+                             }} className="absolute -right-20 -top-6 w-12 h-12 bg-mtg-panel rounded-full flex items-center justify-center border border-white/10 shadow-lg">
+                                <Icon name="Edit2" size={20} className="text-yellow-400" />
+                            </button>
+                        </div>
+                    )}
+                    
+                    {activePlayerForAdd && (
+                        <div className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="bg-mtg-panel w-full max-w-sm rounded-2xl border border-white/10 p-6 shadow-2xl">
+                                <h3 className="text-lg font-bold mb-4 text-center">アイテムを追加</h3>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {PRESETS.map((preset, i) => (
+                                        <button key={i} onClick={() => addWidget(activePlayerForAdd, preset)}
+                                            className="flex flex-col items-center justify-center p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition">
+                                            <Icon name={preset.icon} size={20} className={`mb-2 ${preset.color}`} />
+                                            <span className="text-xs font-bold">{preset.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <button onClick={() => setActivePlayerForAdd(null)} className="mt-4 w-full py-3 text-sm text-gray-500">キャンセル</button>
+                            </div>
+                        </div>
+                    )}
+                    {show3D && <DiceRoller onClose={() => setShow3D(false)} />}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
