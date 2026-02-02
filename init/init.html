@@ -138,7 +138,7 @@
                 {
                 id: 'lost_well',
                 level: 2,
-                name: '迷える井戸',
+                name: '失われた井戸',
                 effect: '占術２',
                 detail: '占術２を行う。',
                 next: ['arena', 'stash'],
@@ -483,8 +483,8 @@
                                 relative flex-1 flex flex-col justify-center items-center py-2 px-0.5 rounded-md transition-all duration-300
                                 overflow-visible
                                 ${isActive 
-                                    ? 'transform -translate-y-2 scale-105 z-10' 
-                                    : 'opacity-70 hover:opacity-100 scale-95 z-0 grayscale-[0.3] hover:grayscale-0'}
+                                    ? 'z-10' 
+                                    : 'opacity-70 hover:opacity-100 z-0 grayscale-[0.3] hover:grayscale-0'}
                             `}
                             >
                             
