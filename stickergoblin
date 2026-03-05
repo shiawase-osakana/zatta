@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ステッカーゴブリン ドローツール</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --app-bg: #fdfdfd;
+      --card-bg: #ffffff;
+      --text-main: #1f2937;
+      --accent-red: #ef4444;
+      --accent-red-hover: #dc2626;
+      --accent-red-light: #fef2f2;
+    }
+    
+    body {
+      background-color: var(--app-bg);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      color: var(--text-main);
+    }
+
+    @keyframes popIn {
+      0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .animate-pop-in {
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    /* =========================================
+       コンパクトモード (初期状態のリスト)
+    ========================================= */
+    .sticker-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      perspective: 1000px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid #f3f4f6;
+      border-radius: 8px;
+      padding: 4px 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.1s;
+      position: relative;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+      transform-origin: center center;
+    }
+    .words-wrapper {
+      display: flex;
+      flex: 1;
+      gap: 3px;
+      overflow: hidden;
+    }
+    .word-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      background: #ffffff;
+      color: #374151;
+      border-radius: 4px;
+      padding: 3px 2px;
+      flex: 1;
+      min-width: 0;
+      border: 1px solid #e5e7eb;
+      transition: all 0.2s;
+    }
+    .word-text {
+      font-size: 9.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      letter-spacing: -0.04em;
+    }
+    .word-badge {
+      font-size: 8px;
+      background: #f3f4f6;
+      color: #6b7280;
+      padding: 1px 3px;
+      border-radius: 3px;
+      font-weight: 800;
+    }
+    .mana-wrapper {
+      width: 28px;
+      text-align: center;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .mana-label {
+      font-size: 8px;
+      color: #9ca3af;
+      line-height: 1;
+      margin-bottom: 1px;
+    }
+    .mana-val {
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--accent-red);
+      line-height: 1;
+    }
+
+    /* =========================================
+       演出用スタイル (シャッフル・ルーレット)
+    ========================================= */
+    .card.highlight {
+      border-color: var(--accent-red) !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25), 0 10px 20px -5px rgba(0, 0, 0, 0.15) !important;
+      transform: scale(1.06) !important;
+      z-index: 30 !important;
+    }
+
+    .card.temp-selected {
+      border-color: var(--accent-red) !important;
+      background: var(--accent-red-light) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.4) !important;
+      transform: scale(1.03) !important;
+      z-index: 20 !important;
+    }
+
+    .hidden-card {
+      display: none !important;
+    }
+
+    /* =========================================
+       ゲームモード (選ばれた3枚の表示)
+    ========================================= */
+    .sticker-list.game-mode { gap: 8px; }
+    .sticker-list.game-mode .card {
+      padding: 12px;
+      border-radius: 12px;
+      flex-direction: column;
+      align-items: flex-start;
+      box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.08);
+      border: 1px solid transparent !important;
+      transform: scale(1) !important;
+      background: #ffffff !important;
+    }
+    .sticker-list.game-mode .words-wrapper {
+      flex-wrap: wrap;
+      overflow: visible;
+      width: 100%;
+      padding-right: 24px;
+      gap: 6px;
+    }
+    .sticker-list.game-mode .word-btn {
+      flex: none;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border-color: #f3f4f6;
+      background: #fafafa;
+      gap: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+    }
+    .sticker-list.game-mode .word-text { font-size: 13px; letter-spacing: normal; color: #1f2937; }
+    .sticker-list.game-mode .word-badge { font-size: 10px; padding: 2px 5px; border-radius: 9999px; background: #e5e7eb; color: #4b5563; }
+    .sticker-list.game-mode .mana-wrapper {
+      position: absolute;
+      top: 10px;
+      right: 12px;
+      width: auto;
+      align-items: flex-end;
+    }
+    .sticker-list.game-mode .mana-label { font-size: 9px; margin-bottom: 2px; color: #d1d5db; }
+    .sticker-list.game-mode .mana-val { font-size: 20px; color: #f3f4f6; }
+
+    /* 単語タップ（使用済み）のスタイル */
+    .word-btn.interactive:active { transform: scale(0.96); }
+    .word-btn.used {
+      background: #f9fafb !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+      opacity: 0.35;
+    }
+    .word-btn.used .word-text { text-decoration: line-through; }
+  </style>
+</head>
+<body class="antialiased min-h-screen pb-6 relative flex flex-col items-center overflow-x-hidden">
+
+  <div class="w-full max-w-md px-4 pt-3">
+    <!-- ヘッダー -->
+    <div class="text-center mb-3">
+      <h1 class="text-xl font-extrabold tracking-tight text-gray-900">ステッカーゴブリン</h1>
+      <p class="text-[10px] text-gray-400 mt-0.5 uppercase tracking-widest font-semibold">Draw Tool</p>
+    </div>
+
+    <!-- メインボタン -->
+    <div class="sticky top-2 z-40 mb-3">
+      <button id="mainBtn" class="w-full font-bold py-3.5 rounded-2xl shadow-lg transition-all duration-200 flex flex-col items-center justify-center gap-0.5 active:scale-95 bg-white border border-red-100 shadow-red-500/10 hover:bg-red-50 relative overflow-hidden group">
+        <div class="absolute inset-0 bg-red-500 opacity-0 transition-opacity duration-200" id="btnBg"></div>
+        <span id="mainBtnTitle" class="text-lg relative z-10 text-red-500 transition-colors duration-200">3枚選ぶ</span>
+        <span id="mainBtnSub" class="text-[10px] text-red-400 font-normal relative z-10 transition-colors duration-200">タップしてシャッフル開始</span>
+      </button>
+    </div>
+
+    <!-- 最大マナ表示エリア -->
+    <div id="maxManaArea" class="hidden mb-3">
+      <div class="bg-white rounded-2xl p-3 shadow-[0_4px_20px_rgb(0,0,0,0.04)] text-center animate-pop-in relative border border-gray-100 flex flex-col items-center justify-center">
+        <h2 class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">Max Mana</h2>
+        <div class="text-5xl font-black text-red-500 leading-none tracking-tighter" id="maxManaDisplay">-</div>
+        <p class="text-[9px] text-gray-400 mt-2 font-medium bg-gray-50 px-3 py-1 rounded-full">使った単語をタップでグレーアウト</p>
+      </div>
+    </div>
+
+    <!-- リストヘッダー -->
+    <div class="mb-1.5 flex justify-between items-end pl-1">
+      <h2 id="listTitle" class="font-bold text-gray-800 text-xs tracking-wide">登録ステッカー (10種)</h2>
+    </div>
+
+    <!-- ステッカーリスト -->
+    <div id="stickerList" class="sticker-list relative">
+      <!-- JSでここにカードが生成されます -->
+    </div>
+
+  </div>
+
+  <script>
+    const stickers = [
+      { id: 1, maxMana: 6, words: [{t:"Playable", v:3}, {t:"Delusionary", v:6}, {t:"Hydra", v:2}] },
+      { id: 2, maxMana: 5, words: [{t:"Unassuming", v:3}, {t:"Gelatinous", v:5}, {t:"Serpent", v:1}] },
+      { id: 3, maxMana: 5, words: [{t:"Unsanctioned", v:5}, {t:"Ancient", v:3}, {t:"Juggler", v:2}] },
+      { id: 4, maxMana: 4, words: [{t:"Ancestral", v:2}, {t:"Hot Dog", v:1}, {t:"Minotaur", v:4}] },
+      { id: 5, maxMana: 4, words: [{t:"Eldrazi", v:3}, {t:"Guacamole", v:4}, {t:"Tightrope", v:3}] },
+      { id: 6, maxMana: 4, words: [{t:"Misunderstood", v:4}, {t:"Trapeze", v:2}, {t:"Elf", v:1}] },
+      { id: 7, maxMana: 4, words: [{t:"Narrow-Minded", v:4}, {t:"Baloney", v:4}, {t:"Fireworks", v:3}] },
+      { id: 8, maxMana: 4, words: [{t:"Phyrexian", v:4}, {t:"Midway", v:3}, {t:"Bamboozle", v:3}] },
+      { id: 9, maxMana: 4, words: [{t:"Unglued", v:2}, {t:"Pea-Brained", v:3}, {t:"Dinosaur", v:4}] },
+      { id: 10, maxMana: 3, words: [{t:"Cursed", v:2}, {t:"Firebreathing", v:3}, {t:"Yogurt", v:3}] },
+    ];
+
+    const listContainer = document.getElementById('stickerList');
+    const mainBtn = document.getElementById('mainBtn');
+    const mainBtnTitle = document.getElementById('mainBtnTitle');
+    const mainBtnSub = document.getElementById('mainBtnSub');
+    const btnBg = document.getElementById('btnBg');
+    const maxManaArea = document.getElementById('maxManaArea');
+    const maxManaDisplay = document.getElementById('maxManaDisplay');
+    const listTitle = document.getElementById('listTitle');
+
+    let mode = 'HOME';
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Fisher-Yates (Knuth) シャッフルアルゴリズム (完全な均等確率)
+    function shuffleArray(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function initList() {
+      listContainer.innerHTML = '';
+      stickers.forEach(s => {
+        const card = document.createElement('div');
+        card.id = `card-${s.id}`;
+        card.dataset.id = s.id;
+        card.className = "card";
+        
+        const wordsHtml = s.words.map(w => `
+          <button type="button" class="word-btn focus:outline-none select-none">
+            <span class="word-text pointer-events-none">${w.t}</span>
+            <span class="word-badge pointer-events-none">${w.v}</span>
+          </button>
+        `).join('');
+
+        card.innerHTML = `
+          <div class="words-wrapper">
+            ${wordsHtml}
+          </div>
+          <div class="mana-wrapper">
+            <span class="mana-label">MAX</span>
+            <span class="mana-val">${s.maxMana}</span>
+          </div>
+        `;
+        listContainer.appendChild(card);
+      });
+    }
+
+    function updateBtnState(newState) {
+      if (newState === 'HOME') {
+        btnBg.classList.replace('opacity-100', 'opacity-0');
+        
+        mainBtnTitle.classList.remove('text-white', 'text-gray-400');
+        mainBtnTitle.classList.add('text-red-500');
+        
+        mainBtnSub.classList.remove('text-red-200', 'hidden');
+        mainBtnSub.classList.add('text-red-400');
+        
+        mainBtnTitle.textContent = '3枚選ぶ';
+        mainBtnSub.textContent = 'タップしてシャッフル開始';
+        mainBtn.classList.remove('cursor-not-allowed', 'opacity-50');
+        mainBtn.disabled = false;
+      } else if (newState === 'ANIMATING') {
+        mainBtn.classList.add('cursor-not-allowed', 'opacity-50');
+        mainBtnTitle.classList.remove('text-red-500', 'text-white');
+        mainBtnTitle.classList.add('text-gray-400');
+        mainBtnTitle.textContent = '抽選中...';
+        mainBtnSub.classList.add('hidden');
+        mainBtn.disabled = true;
+      } else if (newState === 'GAME') {
+        btnBg.classList.replace('opacity-0', 'opacity-100');
+        
+        mainBtnTitle.classList.remove('text-red-500', 'text-gray-400');
+        mainBtnTitle.classList.add('text-white');
+        
+        mainBtnSub.classList.remove('text-red-400', 'hidden');
+        mainBtnSub.classList.add('text-red-200');
+        
+        mainBtnTitle.textContent = 'リセット';
+        mainBtnSub.textContent = '10枚一覧に戻る';
+        mainBtn.classList.remove('cursor-not-allowed', 'opacity-50');
+        mainBtn.disabled = false;
+      }
+    }
+
+    async function startDraw() {
+      if (mode !== 'HOME') return;
+      mode = 'ANIMATING';
+      updateBtnState('ANIMATING');
+
+      let allCards = Array.from(listContainer.children);
+      
+      // 演出用シャッフル（こちらも均等なアルゴリズムを使用）
+      for (let i = 0; i < 6; i++) {
+        allCards = shuffleArray(allCards);
+        allCards.forEach(c => {
+          const tx = (Math.random() - 0.5) * 16;
+          const ty = (Math.random() - 0.5) * 8;
+          const rot = (Math.random() - 0.5) * 4;
+          const scale = 1.02 + Math.random() * 0.05;
+          const zIndex = Math.floor(Math.random() * 20);
+          
+          c.style.transform = `translate(${tx}px, ${ty}px) rotate(${rot}deg) scale(${scale})`;
+          c.style.zIndex = zIndex;
+          c.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)';
+          listContainer.appendChild(c);
+        });
+        await sleep(100);
+      }
+      
+      allCards.forEach(c => {
+        c.style.transform = '';
+        c.style.zIndex = '';
+        c.style.boxShadow = '';
+      });
+      await sleep(150);
+
+      // ★ 実際の抽選ロジック (完全に均等なFisher-Yatesシャッフル)
+      const shuffledStickers = shuffleArray([...stickers]);
+      const selectedIds = shuffledStickers.slice(0, 3).map(s => s.id);
+      const unselectedIds = shuffledStickers.slice(3).map(s => s.id);
+
+      const setHighlight = (id) => {
+        allCards.forEach(c => c.classList.remove('highlight'));
+        if (id) document.getElementById(`card-${id}`).classList.add('highlight');
+      };
+
+      for (let round = 0; round < 3; round++) {
+        const targetId = selectedIds[round];
+        const availableIds = stickers.map(s => s.id).filter(id => !selectedIds.slice(0, round).includes(id));
+        
+        for (let i = 0; i < 6 + round * 2; i++) {
+          const randomId = availableIds[Math.floor(Math.random() * availableIds.length)];
+          setHighlight(randomId);
+          await sleep(50 + (i * 15)); 
+        }
+        
+        setHighlight(null);
+        const targetCard = document.getElementById(`card-${targetId}`);
+        targetCard.classList.add('temp-selected');
+        await sleep(400); 
+      }
+
+      await sleep(300);
+
+      mode = 'GAME';
+      allCards.forEach(c => c.classList.remove('temp-selected'));
+      listContainer.classList.add('game-mode');
+
+      unselectedIds.forEach(id => {
+        document.getElementById(`card-${id}`).classList.add('hidden-card');
+      });
+
+      document.querySelectorAll('.word-btn').forEach(btn => {
+        btn.classList.add('interactive');
+      });
+
+      const maxMana = Math.max(...stickers.filter(s => selectedIds.includes(s.id)).map(s => s.maxMana));
+      maxManaDisplay.textContent = maxMana;
+      maxManaArea.classList.remove('hidden');
+      
+      listTitle.textContent = '選ばれたステッカー (3種)';
+
+      updateBtnState('GAME');
+    }
+
+    function resetGame() {
+      mode = 'HOME';
+      
+      const allCards = Array.from(listContainer.children);
+      allCards.forEach(card => {
+        card.classList.remove('hidden-card', 'temp-selected', 'highlight');
+      });
+
+      listContainer.classList.remove('game-mode');
+
+      allCards.sort((a, b) => parseInt(a.dataset.id) - parseInt(b.dataset.id));
+      allCards.forEach(c => listContainer.appendChild(c));
+
+      document.querySelectorAll('.word-btn').forEach(btn => {
+        btn.classList.remove('interactive', 'used');
+      });
+
+      maxManaArea.classList.add('hidden');
+      listTitle.textContent = '登録ステッカー (10種)';
+      
+      updateBtnState('HOME');
+    }
+
+    mainBtn.addEventListener('click', () => {
+      if (mode === 'HOME') {
+        startDraw();
+      } else if (mode === 'GAME') {
+        resetGame();
+      }
+    });
+
+    listContainer.addEventListener('click', (e) => {
+      if (mode !== 'GAME') return;
+      const btn = e.target.closest('.word-btn');
+      if (btn && btn.classList.contains('interactive')) {
+        btn.classList.toggle('used');
+      }
+    });
+
+    initList();
+
+  </script>
+</body>
+</html>
