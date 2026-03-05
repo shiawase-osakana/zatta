@@ -4,42 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Commander Life Counter</title>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    
+    <!-- Babel (React JSXをブラウザで実行するため) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;400;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700&display=swap');
         
         body {
             font-family: 'Inter', sans-serif;
             background-color: black;
             margin: 0;
-            overflow: hidden;
-            user-select: none;
+            overflow: hidden; /* スクロール防止 */
+            user-select: none; /* テキスト選択防止 */
             -webkit-user-select: none;
-            touch-action: none;
+            touch-action: none; /* ブラウザのジェスチャー防止 */
         }
 
-        .player-card {
-            transition: background-color 0.5s ease, border-color 0.5s ease;
+        /* カスタムスクロールバーの非表示 */
+        ::-webkit-scrollbar {
+            display: none;
         }
-
-        .dial-background {
-            background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.05) 0deg 0.5deg, transparent 0.5deg 3.5deg);
-            -webkit-mask-image: radial-gradient(transparent 68%, black 70%);
-            mask-image: radial-gradient(transparent 68%, black 70%);
-        }
-
-        .life-text {
-            font-variant-numeric: tabular-nums;
-            letter-spacing: -0.05em;
-        }
-
-        .delta-popup {
-            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        /* 画面回転対応のレイアウト */
-        .rotated-90 { transform: rotate(90deg); }
-        .rotated-minus-90 { transform: rotate(-90deg); }
 
         input[type=range] {
             -webkit-appearance: none;
@@ -59,348 +51,374 @@
             background: white;
             margin-top: -7px;
         }
-
-        .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body>
+    <div id="root"></div>
 
-<div id="app" class="h-screen w-screen p-1.5 flex flex-row gap-1 bg-black overflow-hidden relative">
-    <!-- プレイヤーエリアがここにJSで生成されます -->
-    <div id="left-column" class="flex-1 flex flex-col gap-1"></div>
-    <div id="right-column" class="flex-1 flex flex-col gap-1"></div>
+    <script type="text/babel">
+        const { useState, useRef, useEffect, useCallback } = React;
 
-    <!-- 中央設定ボタン -->
-    <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40">
-        <button id="menu-trigger" class="bg-zinc-900/60 p-4 rounded-full text-white/70 backdrop-blur-xl border border-white/10 shadow-2xl active:scale-90 transition-all">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-        </button>
-    </div>
-</div>
+        // プレイヤーごとのテーマカラー
+        const THEMES = [
+          '#3b82f6', // ブルー
+          '#ef4444', // レッド
+          '#10b981', // エメラルド
+          '#a855f7', // パープル
+          '#f97316', // オレンジ
+          '#06b6d4', // シアン
+          '#ec4899', // ピンク
+          '#eab308', // イエロー
+        ];
 
-<!-- 設定モーダル -->
-<div id="settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-xl z-50 hidden flex flex-col items-center justify-center p-6">
-    <div class="bg-zinc-900/90 border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
-        <h2 class="text-2xl font-light mb-10 tracking-widest uppercase text-white">Settings</h2>
-        <div class="mb-10 w-full">
-            <label class="flex justify-between text-xs text-zinc-400 mb-4 tracking-wider uppercase">Players<span id="player-count-display">4</span></label>
-            <input type="range" id="player-count-slider" min="2" max="8" value="4" class="w-full h-1.5 bg-zinc-800 rounded-full appearance-none accent-white cursor-pointer outline-none">
-        </div>
-        <button id="reset-btn" class="w-full py-4 bg-white/5 border border-white/5 rounded-2xl font-medium text-red-400 tracking-wider mb-4 hover:bg-red-950/20 active:scale-95 transition-all">RESET ALL</button>
-        <button id="close-menu-btn" class="w-full py-4 bg-white text-black rounded-2xl font-medium tracking-wider active:scale-95 transition-all">CLOSE</button>
-    </div>
-</div>
+        // アイコンコンポーネント群
+        const SettingsIcon = () => (
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        );
 
-<!-- 統率者ダメージパネル -->
-<div id="commander-panel" class="fixed inset-0 bg-zinc-950 z-[60] hidden flex flex-col p-4 animate-fade-in text-white">
-    <!-- 内容はJSで動的に書き換え -->
-</div>
+        const LifelinkIcon = ({ active, className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+          </svg>
+        );
 
-<script>
-    // --- 定数と状態管理 ---
-    const THEMES = ['#3b82f6', '#ef4444', '#10b981', '#a855f7', '#f97316', '#06b6d4', '#ec4899', '#eab308'];
-    let playerCount = 4;
-    let players = [];
+        const SwordIcon = ({ active, className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="14.5 17.5 3 6 6 3 17.5 14.5"></polyline>
+            <line x1="13" y1="19" x2="19" y2="13"></line>
+            <line x1="16" y1="16" x2="20" y2="20"></line>
+            <line x1="19" y1="21" x2="21" y2="19"></line>
+          </svg>
+        );
 
-    // 初期化
-    function initPlayers() {
-        players = Array.from({ length: 8 }).map((_, i) => ({
-            id: i,
-            life: 40,
-            isLifelink: false,
-            isCommanderAttacking: false,
-            isMyriad: false,
-            commanderDamages: {}, // { sourcePlayerId: amount }
-            delta: 0,
-            showDelta: false,
-            deltaTimeout: null,
-            rotation: 0
-        }));
-    }
+        const MyriadIcon = ({ active, className }) => (
+          <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        );
 
-    // --- ロジック ---
+        const BackIcon = () => (
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        );
 
-    function toggleMode(idx, modeKey) {
-        const isActivating = !players[idx][modeKey];
-        players.forEach((p, i) => {
-            if (i === idx) {
-                p[modeKey] = !p[modeKey];
-            } else if (isActivating) {
-                // 他人がボタンをONにした場合、現在のプレイヤーの全モードを解除
-                p.isLifelink = false;
-                p.isCommanderAttacking = false;
-                p.isMyriad = false;
+        // --- プレイヤーエリア ---
+        const PlayerArea = ({ 
+          player, 
+          colorHex, 
+          isLeft, 
+          onLifeChange, 
+          onToggleMode, 
+          onOpenCommanderDamagePanel 
+        }) => {
+          const { life, isLifelink, isCommanderAttacking, isMyriad, commanderDamages } = player;
+          const [delta, setDelta] = useState(0);
+          const [showDelta, setShowDelta] = useState(false);
+          const [rotation, setRotation] = useState(0);
+
+          const prevLifeRef = useRef(life);
+          const deltaTimeoutRef = useRef(null);
+          const touchStartRef = useRef(null);
+          const accumulatedDyRef = useRef(0);
+          
+          const longPressTimerRef = useRef(null);
+          const isLongPressTriggeredRef = useRef(false);
+
+          const maxCommanderDamage = Math.max(0, ...Object.values(commanderDamages));
+          const isLethalCommanderDamage = maxCommanderDamage >= 21;
+
+          useEffect(() => {
+            if (life !== prevLifeRef.current) {
+              const diff = life - prevLifeRef.current;
+              setDelta(prev => prev + diff);
+              setShowDelta(true);
+              if (deltaTimeoutRef.current) clearTimeout(deltaTimeoutRef.current);
+              deltaTimeoutRef.current = setTimeout(() => {
+                setShowDelta(false);
+                setTimeout(() => setDelta(0), 500); 
+              }, 5000);
+              prevLifeRef.current = life;
             }
-        });
-        render();
-    }
+          }, [life]);
 
-    function handleLifeChange(targetIdx, amount) {
-        if (amount === 0) return;
+          const handlePointerDown = (e) => {
+            e.target.setPointerCapture(e.pointerId);
+            touchStartRef.current = e.clientY;
+            accumulatedDyRef.current = 0;
+          };
 
-        const lifelinker = players.find(p => p.isLifelink);
-        const attackerCM = players.find(p => p.isCommanderAttacking);
-        const attackerMyriad = players.find(p => p.isMyriad);
+          const handlePointerMove = (e) => {
+            if (touchStartRef.current === null) return;
+            const currentY = e.clientY;
+            const dy = currentY - touchStartRef.current;
+            const swipeDelta = isLeft ? dy : -dy;
+            setRotation((prev) => prev + (isLeft ? dy : -dy) * 0.3);
+            accumulatedDyRef.current += swipeDelta;
+            const threshold = 22; 
 
-        let myriadTargets = [];
-        if (amount < 0 && attackerMyriad) {
-            myriadTargets = players.slice(0, playerCount)
-                .filter(p => p.id !== targetIdx && p.id !== attackerMyriad.id)
-                .map(p => p.id);
+            if (Math.abs(accumulatedDyRef.current) >= threshold) {
+              const lifeChange = Math.sign(accumulatedDyRef.current) * Math.floor(Math.abs(accumulatedDyRef.current) / threshold);
+              accumulatedDyRef.current -= lifeChange * threshold;
+              onLifeChange(lifeChange);
+            }
+            touchStartRef.current = currentY;
+          };
+
+          const handlePointerUp = (e) => {
+            if (touchStartRef.current !== null) {
+              try { e.target.releasePointerCapture(e.pointerId); } catch (err) {}
+            }
+            touchStartRef.current = null;
+          };
+
+          const handleSwordPointerDown = (e) => {
+            e.stopPropagation();
+            isLongPressTriggeredRef.current = false;
+            longPressTimerRef.current = setTimeout(() => {
+              isLongPressTriggeredRef.current = true;
+              onOpenCommanderDamagePanel(player.id);
+            }, 600); 
+          };
+
+          const handleSwordPointerUp = (e) => {
+            e.stopPropagation();
+            if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+            if (!isLongPressTriggeredRef.current) onToggleMode('isCommanderAttacking');
+          };
+
+          const getButtonClass = (isActive) => `
+            w-[min(6.5vh,2.4rem)] h-[min(6.5vh,2.4rem)] 
+            flex items-center justify-center shrink-0 
+            rounded-full backdrop-blur-xl transition-all duration-300 border shadow-xl
+            ${isActive 
+              ? 'border-[var(--theme-color)] text-[var(--theme-color)] bg-[var(--theme-color)]/20 scale-110' 
+              : 'border-white/5 text-white/40 bg-black/60 hover:bg-white/10 hover:text-white/70'
+            }
+          `;
+
+          return (
+            <div 
+              className={`relative flex-1 w-full h-full overflow-hidden touch-none select-none cursor-ns-resize rounded-2xl border-[0.5px] shadow-inner transition-colors duration-500
+                ${isLethalCommanderDamage ? 'bg-red-950/80 border-red-500/50' : 'bg-zinc-950 border-white/5'}
+              `}
+              style={{ 
+                '--theme-color': isLethalCommanderDamage ? '#ef4444' : colorHex, 
+                '--theme-glow': `0 0 60px ${isLethalCommanderDamage ? '#ef4444' : colorHex}40`,
+                '--theme-text-glow': `0 0 30px ${isLethalCommanderDamage ? '#ef4444' : colorHex}80`
+              }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+            >
+              {/* Dial background */}
+              <div className={`absolute top-1/2 -translate-y-1/2 pointer-events-none mix-blend-screen ${isLeft ? 'left-0 -translate-x-[45%]' : 'right-0 translate-x-[45%]' } w-[140%] max-w-[550px] aspect-square`}>
+                <div className="w-full h-full rounded-full border border-white/5 relative" style={{ transform: `rotate(${rotation}deg)`, transition: 'transform 0.05s linear' }}>
+                  <div className="absolute inset-[18%] rounded-full border border-white/10" style={{ boxShadow: 'var(--theme-glow)', borderColor: 'var(--theme-color)', opacity: 0.8 }} />
+                </div>
+              </div>
+
+              <div className={`absolute inset-0 flex items-center justify-center pointer-events-none transition-transform ${isLeft ? 'rotate-90' : '-rotate-90'}`}>
+                <div className="relative flex flex-col items-center justify-center w-full h-full">
+                  {maxCommanderDamage > 0 && !isLethalCommanderDamage && (
+                    <span className="absolute text-[min(40vw,30vh)] font-bold text-white/15 tracking-tighter leading-none z-0 mix-blend-overlay select-none tabular-nums">{maxCommanderDamage}</span>
+                  )}
+
+                  <div className={`absolute top-[12%] px-6 py-2 rounded-full backdrop-blur-md border border-white/10 text-[min(5vw,4vh)] font-bold transition-all duration-500 ease-out z-20 ${showDelta ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 -translate-y-4'}`} style={{ backgroundColor: 'rgba(24, 24, 27, 0.6)', color: delta > 0 ? '#4ade80' : delta < 0 ? '#f87171' : '#d1d5db' }}>
+                    {delta > 0 ? `+${delta}` : delta !== 0 ? delta : ''}
+                  </div>
+
+                  <span className={`text-[min(26vw,19vh)] font-light tracking-tighter leading-none z-10 transition-colors tabular-nums ${isLethalCommanderDamage ? 'text-red-100' : 'text-white'}`} style={{ textShadow: 'var(--theme-text-glow)' }}>{life}</span>
+
+                  <div className="mt-2 w-[95%] max-w-[220px] px-2 flex flex-wrap justify-center items-center gap-2 pointer-events-auto z-30">
+                    <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onToggleMode('isLifelink')} className={getButtonClass(isLifelink)}><LifelinkIcon active={isLifelink} className="w-[50%] h-[50%]" /></button>
+                    <button onPointerDown={handleSwordPointerDown} onPointerUp={handleSwordPointerUp} onPointerCancel={handleSwordPointerUp} className={getButtonClass(isCommanderAttacking)}><SwordIcon active={isCommanderAttacking} className="w-[50%] h-[50%]" /></button>
+                    <button onPointerDown={(e) => e.stopPropagation()} onClick={() => onToggleMode('isMyriad')} className={getButtonClass(isMyriad)}><MyriadIcon active={isMyriad} className="w-[50%] h-[50%]" /></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        // --- 統率者ダメージパネル ---
+        const CommanderDamagePanel = ({ targetPlayerId, players, onClose, onUpdateCommanderDamage }) => {
+          const targetPlayer = players.find(p => p.id === targetPlayerId);
+          const targetIndex = players.findIndex(p => p.id === targetPlayerId);
+          const targetColor = THEMES[targetIndex % THEMES.length];
+
+          return (
+            <div className="absolute inset-0 bg-zinc-950 z-50 flex flex-col p-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/10 pt-4 px-2">
+                <button onClick={onClose} className="p-3 rounded-full bg-white/5 text-white/70 active:scale-95 transition-all"><BackIcon /></button>
+                <div className="flex flex-col items-end">
+                  <span className="text-sm font-light text-white/50 tracking-widest uppercase">Commander Damage</span>
+                  <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: targetColor, boxShadow: `0 0 10px ${targetColor}` }} /><span className="text-xl font-medium tracking-wider text-white">Player {targetIndex + 1}</span></div>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto overflow-x-hidden pb-10 flex flex-col gap-3 px-2">
+                {players.map((sourcePlayer, idx) => {
+                  const sourceColor = THEMES[idx % THEMES.length];
+                  const damageAmount = targetPlayer.commanderDamages[sourcePlayer.id] || 0;
+                  return (
+                    <div key={sourcePlayer.id} className={`flex items-center justify-between p-4 rounded-2xl border ${damageAmount >= 21 ? 'bg-red-900/30 border-red-500/50' : 'bg-zinc-900/50 border-white/5'}`}>
+                      <div className="flex items-center gap-4"><div className="w-4 h-12 rounded-full" style={{ backgroundColor: sourceColor, boxShadow: `0 0 15px ${sourceColor}80` }} /><div><span className="block text-xs text-white/50 tracking-tighter uppercase">FROM {sourcePlayer.id === targetPlayerId ? 'MY COMMANDER' : `PLAYER ${idx + 1}`}</span><span className={`text-3xl font-light tabular-nums ${damageAmount >= 21 ? 'text-red-400 font-bold' : 'text-white'}`}>{damageAmount}</span></div></div>
+                      <div className="flex items-center gap-2"><button onClick={() => onUpdateCommanderDamage(targetPlayerId, sourcePlayer.id, -1)} className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center text-3xl font-light text-white/70 active:scale-95 transition-all">-</button><button onClick={() => onUpdateCommanderDamage(targetPlayerId, sourcePlayer.id, 1)} className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-3xl font-light text-white active:scale-95 transition-all">+</button></div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        };
+
+        // --- メインアプリケーション ---
+        function App() {
+          const [playerCount, setPlayerCount] = useState(4);
+          const [resetKey, setResetKey] = useState(0);
+          const [isMenuOpen, setIsMenuOpen] = useState(false);
+          const [activeCommanderDamagePlayerId, setActiveCommanderDamagePlayerId] = useState(null);
+
+          const [players, setPlayers] = useState(
+            Array.from({ length: 8 }).map((_, i) => ({
+              id: `player-${i}`,
+              life: 40,
+              isLifelink: false,
+              isCommanderAttacking: false,
+              isMyriad: false,
+              commanderDamages: {}, 
+            }))
+          );
+
+          useEffect(() => {
+            const validIds = Array.from({ length: playerCount }).map((_, i) => `player-${i}`);
+            setPlayers(prev => prev.map(p => {
+              const newCmdDmg = { ...p.commanderDamages };
+              Object.keys(newCmdDmg).forEach(sourceId => { if (!validIds.includes(sourceId)) delete newCmdDmg[sourceId]; });
+              return { ...p, commanderDamages: newCmdDmg };
+            }));
+          }, [playerCount]);
+
+          // モード切替：自分のボタンは複数ONにできるが、他のプレイヤーがONにした場合は他人のみリセット
+          const togglePlayerMode = useCallback((targetId, modeKey) => {
+            setPlayers(prev => {
+              const isActivating = !prev.find(p => p.id === targetId)[modeKey];
+              return prev.map(p => {
+                if (p.id === targetId) {
+                  return { ...p, [modeKey]: !p[modeKey] };
+                } else if (isActivating) {
+                  // 他人がボタンをONにした場合、現在のプレイヤーは全てOFF
+                  return { ...p, isLifelink: false, isCommanderAttacking: false, isMyriad: false };
+                }
+                return p;
+              });
+            });
+          }, []);
+
+          const handleLifeChange = useCallback((targetId, amount) => {
+            setPlayers(prevPlayers => {
+              const lifelinker = prevPlayers.find(p => p.isLifelink);
+              const attackerCM = prevPlayers.find(p => p.isCommanderAttacking);
+              const attackerMyriad = prevPlayers.find(p => p.isMyriad);
+              
+              let myriadTargets = [];
+              // 誰かが無尽モードかつダメージ発生時、ターゲット以外の相手をリストアップ
+              if (amount < 0 && attackerMyriad) {
+                myriadTargets = prevPlayers.slice(0, playerCount)
+                  .filter(p => p.id !== targetId && p.id !== attackerMyriad.id)
+                  .map(p => p.id);
+              }
+
+              return prevPlayers.map(p => {
+                let updated = { ...p };
+                
+                // 1. メインターゲット（ダイヤルを回された人）の処理
+                if (p.id === targetId) {
+                  updated.life += amount;
+                  // 統率者ダメージ：攻撃者が自分以外の場合のみ記録
+                  if (amount < 0 && attackerCM && attackerCM.id !== targetId) {
+                     updated.commanderDamages = { 
+                       ...updated.commanderDamages, 
+                       [attackerCM.id]: (updated.commanderDamages[attackerCM.id] || 0) + Math.abs(amount) 
+                     };
+                  }
+                }
+
+                // 2. 絆魂（Lifelink）の処理
+                // 他人がライフ変動した際、絆魂プレイヤーのライフを連動させる
+                if (lifelinker && lifelinker.id === p.id && targetId !== lifelinker.id) {
+                  // 相手が減れば自分は増える、相手が増えれば自分は減る
+                  updated.life -= amount;
+                }
+
+                // 3. 無尽（Myriad）の処理
+                if (amount < 0 && myriadTargets.includes(p.id)) {
+                  updated.life += amount;
+                }
+
+                return updated;
+              });
+            });
+          }, [playerCount]);
+
+          const handleUpdateCommanderDamage = (targetId, sourceId, delta) => {
+            setPlayers(prev => prev.map(p => {
+              if (p.id !== targetId) return p;
+              const current = p.commanderDamages[sourceId] || 0;
+              const next = Math.max(0, current + delta);
+              return { ...p, life: p.life + (current - next), commanderDamages: { ...p.commanderDamages, [sourceId]: next } };
+            }));
+          };
+
+          const leftCount = Math.ceil(playerCount / 2);
+          const handleReset = () => { 
+            setPlayers(prev => prev.map(p => ({ ...p, life: 40, isLifelink: false, isCommanderAttacking: false, isMyriad: false, commanderDamages: {} }))); 
+            setResetKey(prev => prev + 1); 
+            setIsMenuOpen(false); 
+          };
+
+          return (
+            <div className="h-screen w-screen p-1.5 flex flex-row gap-1 bg-black text-white overflow-hidden touch-none select-none font-sans relative">
+              <div className="flex-1 flex flex-col gap-1">
+                {players.slice(0, leftCount).map((p, i) => (
+                  <PlayerArea key={`${p.id}-${resetKey}`} player={p} colorHex={THEMES[i % THEMES.length]} isLeft={true} onLifeChange={(amt) => handleLifeChange(p.id, amt)} onToggleMode={(key) => togglePlayerMode(p.id, key)} onOpenCommanderDamagePanel={setActiveCommanderDamagePlayerId} />
+                ))}
+              </div>
+              <div className="flex-1 flex flex-col gap-1">
+                {players.slice(leftCount, playerCount).map((p, i) => (
+                  <PlayerArea key={`${p.id}-${resetKey}`} player={p} colorHex={THEMES[(i + leftCount) % THEMES.length]} isLeft={false} onLifeChange={(amt) => handleLifeChange(p.id, amt)} onToggleMode={(key) => togglePlayerMode(p.id, key)} onOpenCommanderDamagePanel={setActiveCommanderDamagePlayerId} />
+                ))}
+              </div>
+
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40">
+                <button onClick={() => setIsMenuOpen(true)} className="bg-zinc-900/60 p-4 rounded-full text-white/70 backdrop-blur-xl border border-white/10 shadow-2xl transition-all active:scale-90"><SettingsIcon /></button>
+              </div>
+
+              {activeCommanderDamagePlayerId && <CommanderDamagePanel targetPlayerId={activeCommanderDamagePlayerId} players={players.slice(0, playerCount)} onClose={() => setActiveCommanderDamagePlayerId(null)} onUpdateCommanderDamage={handleUpdateCommanderDamage} />}
+
+              {isMenuOpen && (
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-6 animate-in fade-in duration-300">
+                  <div className="bg-zinc-900/90 border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl text-center">
+                    <h2 className="text-2xl font-light mb-10 tracking-widest text-white">SETTINGS</h2>
+                    <div className="mb-10 w-full"><label className="flex justify-between text-xs text-zinc-400 mb-4 tracking-wider uppercase">Players<span className="text-white font-bold">{playerCount}</span></label><input type="range" min="2" max="8" value={playerCount} onChange={(e) => setPlayerCount(Number(e.target.value))} className="w-full h-1.5 bg-zinc-800 rounded-full appearance-none accent-white cursor-pointer outline-none" /></div>
+                    <button onClick={handleReset} className="w-full py-4 bg-white/5 border border-white/5 rounded-2xl font-medium text-red-400 tracking-wider mb-4 hover:bg-red-950/20">RESET ALL</button>
+                    <button onClick={() => setIsMenuOpen(false)} className="w-full py-4 bg-white text-black rounded-2xl font-medium tracking-wider hover:bg-zinc-200">CLOSE</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
         }
 
-        players.forEach((p, i) => {
-            // 1. 直接ターゲット
-            if (i === targetIdx) {
-                p.life += amount;
-                updateDelta(p, amount);
-                // 統率者ダメージ記録
-                if (amount < 0 && attackerCM && attackerCM.id !== targetIdx) {
-                    p.commanderDamages[attackerCM.id] = (p.commanderDamages[attackerCM.id] || 0) + Math.abs(amount);
-                }
-            }
-
-            // 2. 絆魂 (他人の変動に連動)
-            if (lifelinker && lifelinker.id === i && targetIdx !== lifelinker.id) {
-                const gain = -amount;
-                p.life += gain;
-                updateDelta(p, gain);
-            }
-
-            // 3. 無尽 (ターゲット以外に波及)
-            if (amount < 0 && myriadTargets.includes(i)) {
-                p.life += amount;
-                updateDelta(p, amount);
-            }
-        });
-        render();
-    }
-
-    function updateDelta(player, amount) {
-        player.delta += amount;
-        player.showDelta = true;
-        if (player.deltaTimeout) clearTimeout(player.deltaTimeout);
-        player.deltaTimeout = setTimeout(() => {
-            player.showDelta = false;
-            setTimeout(() => { player.delta = 0; render(); }, 500);
-            render();
-        }, 5000);
-    }
-
-    function updateCommanderDamageDirectly(targetIdx, sourceIdx, delta) {
-        const p = players[targetIdx];
-        const current = p.commanderDamages[sourceIdx] || 0;
-        const next = Math.max(0, current + delta);
-        const lifeDelta = current - next; // ダメージ増ならマイナス
-        p.life += lifeDelta;
-        p.commanderDamages[sourceIdx] = next;
-        
-        if (lifeDelta !== 0) updateDelta(p, lifeDelta);
-        
-        renderCommanderPanel(targetIdx);
-        render();
-    }
-
-    // --- UI レンダリング ---
-
-    const leftCol = document.getElementById('left-column');
-    const rightCol = document.getElementById('right-column');
-
-    function render() {
-        const leftCount = Math.ceil(playerCount / 2);
-        leftCol.innerHTML = '';
-        rightCol.innerHTML = '';
-
-        players.slice(0, playerCount).forEach((p, i) => {
-            const isLeft = i < leftCount;
-            const container = isLeft ? leftCol : rightCol;
-            container.appendChild(createPlayerElement(p, i, isLeft));
-        });
-    }
-
-    function createPlayerElement(p, idx, isLeft) {
-        const themeColor = THEMES[idx % THEMES.length];
-        const maxCmdDmg = Math.max(0, ...Object.values(p.commanderDamages));
-        const isLethal = maxCmdDmg >= 21;
-
-        const el = document.createElement('div');
-        el.className = `player-card relative flex-1 w-full h-full overflow-hidden rounded-2xl border-[0.5px] shadow-inner ${isLethal ? 'bg-red-950/80 border-red-500/50' : 'bg-zinc-950 border-white/5'}`;
-        el.style.setProperty('--theme-color', isLethal ? '#ef4444' : themeColor);
-        
-        // ダイヤル背景
-        const dial = `
-            <div class="absolute top-1/2 -translate-y-1/2 pointer-events-none mix-blend-screen ${isLeft ? 'left-0 -translate-x-[45%]' : 'right-0 translate-x-[45%]'} w-[140%] aspect-square">
-                <div class="w-full h-full rounded-full border border-white/5 relative" style="transform: rotate(${p.rotation}deg)">
-                    <div class="dial-background absolute inset-0"></div>
-                    <div class="absolute inset-[18%] rounded-full border border-white/10" style="box-shadow: 0 0 40px ${isLethal ? '#ef4444' : themeColor}40; border-color: ${isLethal ? '#ef4444' : themeColor}; opacity: 0.6"></div>
-                </div>
-            </div>
-        `;
-
-        // 内容（90度回転）
-        const content = `
-            <div class="absolute inset-0 flex items-center justify-center pointer-events-none ${isLeft ? 'rotated-90' : 'rotated-minus-90'}">
-                <div class="relative flex flex-col items-center justify-center w-full h-full">
-                    ${(maxCmdDmg > 0 && !isLethal) ? `<span class="absolute text-[40vw] font-bold text-white/10 mix-blend-overlay z-0">${maxCmdDmg}</span>` : ''}
-                    ${isLethal ? `<div class="absolute inset-0 flex items-center justify-center opacity-10"><svg width="80%" height="80%" viewBox="0 0 24 24" fill="none" stroke="red" stroke-width="0.5"><circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><path d="M8 20v2h8v-2M12.5 17l-.5-1-.5 1h1zM16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20"></path></svg></div>` : ''}
-                    
-                    <div class="delta-popup absolute top-[12%] px-5 py-1.5 rounded-full backdrop-blur-md border border-white/10 font-bold text-[5vw] z-20 ${p.showDelta ? 'opacity-100' : 'opacity-0 -translate-y-2'}" style="background: rgba(24,24,27,0.6); color: ${p.delta > 0 ? '#4ade80' : p.delta < 0 ? '#f87171' : '#d1d5db'}">
-                        ${p.delta > 0 ? '+'+p.delta : p.delta || ''}
-                    </div>
-
-                    <span class="life-text text-[26vw] font-light z-10 transition-colors ${isLethal ? 'text-red-100' : 'text-white'}" style="text-shadow: 0 0 30px ${isLethal ? '#ef444480' : themeColor + '80'}">${p.life}</span>
-
-                    <div class="mt-2 w-[95%] max-w-[220px] flex flex-wrap justify-center gap-2 pointer-events-auto z-30">
-                        ${createModeBtn('isLifelink', p.isLifelink, idx)}
-                        ${createModeBtn('isCommanderAttacking', p.isCommanderAttacking, idx)}
-                        ${createModeBtn('isMyriad', p.isMyriad, idx)}
-                    </div>
-                </div>
-            </div>
-        `;
-
-        el.innerHTML = dial + content;
-
-        // イベント設定
-        let startY = 0;
-        let accum = 0;
-        let longPressTimer = null;
-
-        el.addEventListener('pointerdown', (e) => {
-            el.setPointerCapture(e.pointerId);
-            startY = e.clientY;
-            accum = 0;
-        });
-
-        el.addEventListener('pointermove', (e) => {
-            if (startY === 0) return;
-            const dy = e.clientY - startY;
-            const swipeDelta = isLeft ? dy : -dy;
-            p.rotation += (isLeft ? dy : -dy) * 0.3;
-            accum += swipeDelta;
-            
-            if (Math.abs(accum) >= 22) {
-                const change = Math.sign(accum) * Math.floor(Math.abs(accum) / 22);
-                accum -= change * 22;
-                handleLifeChange(idx, change);
-            }
-            startY = e.clientY;
-            el.querySelector('.w-full.h-full.rounded-full').style.transform = `rotate(${p.rotation}deg)`;
-        });
-
-        el.addEventListener('pointerup', () => startY = 0);
-
-        // ボタン個別
-        const btns = el.querySelectorAll('button');
-        // 0: Lifelink, 1: Commander, 2: Myriad
-        btns[0].onclick = (e) => { e.stopPropagation(); toggleMode(idx, 'isLifelink'); };
-        
-        // 統率者ダメージボタンの特殊操作
-        btns[1].addEventListener('pointerdown', (e) => {
-            e.stopPropagation();
-            longPressTimer = setTimeout(() => {
-                longPressTimer = null;
-                openCommanderPanel(idx);
-            }, 600);
-        });
-        btns[1].addEventListener('pointerup', (e) => {
-            e.stopPropagation();
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-                toggleMode(idx, 'isCommanderAttacking');
-            }
-        });
-
-        btns[2].onclick = (e) => { e.stopPropagation(); toggleMode(idx, 'isMyriad'); };
-
-        return el;
-    }
-
-    function createModeBtn(key, isActive, playerIdx) {
-        const themeColor = THEMES[playerIdx % THEMES.length];
-        const activeStyles = `border-[${themeColor}] text-[${themeColor}] bg-[${themeColor}]20 scale-110 shadow-[0_0_15px_${themeColor}]`;
-        const inactiveStyles = `border-white/5 text-white/40 bg-black/60 shadow-[0_4px_10px_rgba(0,0,0,0.8)]`;
-        
-        let icon = '';
-        if (key === 'isLifelink') icon = '<svg class="w-1/2 h-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" /></svg>';
-        if (key === 'isCommanderAttacking') icon = '<svg class="w-1/2 h-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 6 3 17.5 14.5"></polyline><line x1="13" y1="19" x2="19" y2="13"></line><line x1="16" y1="16" x2="20" y2="20"></line><line x1="19" y1="21" x2="21" y2="19"></line></svg>';
-        if (key === 'isMyriad') icon = '<svg class="w-1/2 h-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
-
-        return `<button class="w-[min(6.5vh,2.4rem)] h-[min(6.5vh,2.4rem)] flex items-center justify-center rounded-full backdrop-blur-xl transition-all duration-300 border ${isActive ? '' : inactiveStyles}" style="${isActive ? `border-color:${themeColor}; color:${themeColor}; background:${themeColor}33; transform:scale(1.1); box-shadow: 0 0 15px ${themeColor}, inset 0 0 10px ${themeColor}` : ''}">${icon}</button>`;
-    }
-
-    // --- 統率者パネル機能 ---
-
-    function openCommanderPanel(targetIdx) {
-        document.getElementById('commander-panel').classList.remove('hidden');
-        renderCommanderPanel(targetIdx);
-    }
-
-    function renderCommanderPanel(targetIdx) {
-        const p = players[targetIdx];
-        const panel = document.getElementById('commander-panel');
-        const themeColor = THEMES[targetIdx % THEMES.length];
-        
-        let rows = players.slice(0, playerCount).map((source, sIdx) => {
-            const dmg = p.commanderDamages[sIdx] || 0;
-            const sourceColor = THEMES[sIdx % THEMES.length];
-            return `
-                <div class="flex items-center justify-between p-4 rounded-2xl border ${dmg >= 21 ? 'bg-red-900/30 border-red-500/50' : 'bg-zinc-900/50 border-white/5'}">
-                    <div class="flex items-center gap-4">
-                        <div class="w-4 h-12 rounded-full" style="background:${sourceColor}; box-shadow: 0 0 15px ${sourceColor}80"></div>
-                        <div>
-                            <span class="block text-xs text-white/50 tracking-tighter uppercase">FROM ${sIdx === targetIdx ? 'MY COMMANDER' : 'PLAYER ' + (sIdx + 1)}</span>
-                            <span class="text-3xl font-light ${dmg >= 21 ? 'text-red-400 font-bold' : 'text-white'}">${dmg}</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="updateCommanderDamageDirectly(${targetIdx}, ${sIdx}, -1)" class="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center text-3xl font-light text-white/70 active:scale-95 transition-all">-</button>
-                        <button onclick="updateCommanderDamageDirectly(${targetIdx}, ${sIdx}, 1)" class="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-3xl font-light text-white active:scale-95 transition-all">+</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        panel.innerHTML = `
-            <div class="flex items-center justify-between mb-8 pb-4 border-b border-white/10 pt-4 px-2">
-                <button onclick="document.getElementById('commander-panel').classList.add('hidden')" class="p-3 rounded-full bg-white/5 text-white/70 active:scale-95 transition-all"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></button>
-                <div class="flex flex-col items-end">
-                    <span class="text-sm font-light text-white/50 tracking-widest uppercase">Commander Damage</span>
-                    <div class="flex items-center gap-3">
-                        <div class="w-3 h-3 rounded-full" style="background:${themeColor}; box-shadow: 0 0 10px ${themeColor}"></div>
-                        <span class="text-xl font-medium tracking-wider">Player ${targetIdx + 1}</span>
-                    </div>
-                </div>
-            </div>
-            <div class="flex-1 overflow-y-auto pb-10 flex flex-col gap-3 px-2">${rows}</div>
-        `;
-    }
-
-    // --- メニュー機能 ---
-
-    const menu = document.getElementById('settings-modal');
-    document.getElementById('menu-trigger').onclick = () => menu.classList.remove('hidden');
-    document.getElementById('close-menu-btn').onclick = () => menu.classList.add('hidden');
-    
-    const slider = document.getElementById('player-count-slider');
-    slider.oninput = (e) => {
-        playerCount = parseInt(e.target.value);
-        document.getElementById('player-count-display').innerText = playerCount;
-        render();
-    };
-
-    document.getElementById('reset-btn').onclick = () => {
-        initPlayers();
-        render();
-        menu.classList.add('hidden');
-    };
-
-    // 起動
-    initPlayers();
-    render();
-
-</script>
+        // Reactアプリのマウント
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
